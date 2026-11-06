@@ -146,9 +146,9 @@ describe("composer attach button", () => {
 		assert.deepEqual(result, { paths: ["/notes/a.pdf"], skipped: 2 });
 	});
 
-	it("server render is the browser case: a disabled-looking paperclip between the input and Send", () => {
+	it("server render: a live paperclip between the input and Send", () => {
 		const html = renderToStaticMarkup(<Composer busy={false} value="" onChange={() => {}} onSend={() => {}} onStop={() => {}} canSend={false} />);
-		assert.match(html, /aria-label="Attach files"[^>]*aria-disabled="true"|aria-disabled="true"[^>]*aria-label="Attach files"/);
+		assert.ok(!/aria-label="Attach files"[^>]*aria-disabled="true"|aria-disabled="true"[^>]*aria-label="Attach files"/.test(html));
 		const editor = html.indexOf("data-file-path-input");
 		const attach = html.indexOf('data-testid="attach-files"');
 		const send = html.indexOf('aria-label="Send"');
@@ -259,12 +259,88 @@ describe("composer attach button", () => {
 		assert.equal(f.sends, 0);
 	});
 
-	it("browser: the button stays inert and the picker never opens", async () => {
-		const f = await fixture({ desktop: false });
-		assert.equal(f.button.getAttribute("aria-disabled"), "true");
-		await act(async () => { f.button.click(); });
-		assert.equal(f.pickerClicks, 0);
-		await f.pick([f.file("a.pdf", "/a.pdf")]);
-		assert.equal(f.value, "readthis");
+	describe("browser: the server shows a native dialog", () => {
+		function stubPicker(respond: () => Response | Promise<Response>) {
+			const calls: { url: string; init: RequestInit }[] = [];
+			const previous = globalThis.fetch;
+			globalThis.fetch = (async (url: string, init: RequestInit) => { calls.push({ url, init }); return respond(); }) as typeof fetch;
+			const restore = cleanup;
+			cleanup = async () => { globalThis.fetch = previous; await restore?.(); };
+			return calls;
+		}
+		const paths = (list: string[]) => () => Response.json({ paths: list });
+
+		it("offers Files and Folder", async () => {
+			const f = await fixture({ desktop: false });
+			assert.equal(f.button.getAttribute("aria-disabled"), "false");
+			await act(async () => { f.button.click(); });
+			assert.deepEqual(Array.from(f.doc.querySelectorAll('[role="menuitem"]')).map((item) => item.textContent), ["Files", "Folder"]);
+		});
+
+		it("Files asks the server and inserts chips at the caret, without the browser's own picker", async () => {
+			const f = await fixture({ desktop: false });
+			const chosen = ["C:\\course\\week 3.pdf", "C:\\photos\\board.jpg"];
+			const calls = stubPicker(paths(chosen));
+			f.caret(4);
+			await act(async () => { f.button.click(); });
+			await f.choice("Files");
+			assert.equal(calls.length, 1);
+			assert.equal(calls[0]!.url, "/api/path-picker");
+			assert.equal(calls[0]!.init.method, "POST");
+			assert.deepEqual(JSON.parse(String(calls[0]!.init.body)), { mode: "files" });
+			assert.equal((calls[0]!.init.headers as Record<string, string>)["x-learnharness-path-picker"], "1");
+			assert.equal(f.pickerClicks, 0);
+			assert.equal(f.value, `read ${chosen.map(quoteFilePath).join(" ")} this`);
+			assert.equal(f.sends, 0, "choosing never sends the message");
+		});
+
+		it("Folder inserts a directory reference", async () => {
+			const f = await fixture({ desktop: false });
+			const calls = stubPicker(paths(["C:\\course"]));
+			f.caret(4);
+			await act(async () => { f.button.click(); });
+			await f.choice("Folder");
+			assert.deepEqual(JSON.parse(String(calls[0]!.init.body)), { mode: "folder" });
+			assert.equal(f.value, `read ${quoteFilePath("C:\\course\\")} this`);
+		});
+
+		it("cancelling leaves the draft alone", async () => {
+			const f = await fixture({ desktop: false });
+			stubPicker(paths([]));
+			await act(async () => { f.button.click(); });
+			await f.choice("Folder");
+			assert.equal(f.value, "readthis");
+			assert.equal(f.doc.querySelector('[data-testid="attachment-popup"]'), null);
+		});
+
+		it("an unsupported server falls back to the paste advice", async () => {
+			const f = await fixture({ desktop: false });
+			stubPicker(() => Response.json({ error: "no" }, { status: 501 }));
+			await act(async () => { f.button.click(); });
+			await f.choice("Files");
+			assert.match(f.doc.querySelector('[data-testid="attachment-popup"]')!.textContent!, /paste a full path/);
+			assert.equal(f.value, "readthis");
+		});
+
+		it("a failed request says so", async () => {
+			const f = await fixture({ desktop: false });
+			stubPicker(() => { throw new Error("offline"); });
+			await act(async () => { f.button.click(); });
+			await f.choice("Folder");
+			assert.match(f.doc.querySelector('[data-testid="attachment-popup"]')!.textContent!, /Could not open the file picker/);
+			assert.equal(f.value, "readthis");
+		});
+
+		it("a second dialog request is ignored while one is open", async () => {
+			const f = await fixture({ desktop: false });
+			let release!: (response: Response) => void;
+			const calls = stubPicker(() => new Promise<Response>((resolve) => { release = resolve; }));
+			await act(async () => { f.button.click(); });
+			await f.choice("Files");
+			await act(async () => { f.button.click(); });
+			await f.choice("Folder");
+			assert.equal(calls.length, 1);
+			await act(async () => { release(Response.json({ paths: [] })); });
+		});
 	});
 });

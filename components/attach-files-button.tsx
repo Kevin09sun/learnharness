@@ -6,7 +6,21 @@ import { PaperclipIcon } from "lucide-react";
 import { directoryReferencePath, quoteFilePath } from "@/src/core";
 import { Hint } from "@/components/ui/hint";
 import { INSERT_FILE_PATHS_EVENT } from "@/components/path-input";
-import { BROWSER_NOTICE } from "@/components/file-path-drop-zone";
+
+const PICKER_UNAVAILABLE_NOTICE = "The file picker is not available on this system. You can paste a full path instead.";
+
+/** The browser case: a browser File has no local path, so the server (on this
+ *  same machine) shows the native dialog. null = this OS has no dialog. */
+async function requestNativePaths(mode: "files" | "folder"): Promise<string[] | null> {
+	const response = await fetch("/api/path-picker", {
+		method: "POST",
+		headers: { "Content-Type": "application/json", "x-learnharness-path-picker": "1" },
+		body: JSON.stringify({ mode }),
+	});
+	if (response.status === 501) return null;
+	if (!response.ok) throw new Error("File picker request failed.");
+	return ((await response.json()) as { paths: string[] }).paths;
+}
 
 /** Picked files → the rooted paths an editor chips (issue #285), via the
  *  desktop bridge. Same validity rule as drops: a file without a usable
@@ -50,17 +64,16 @@ function useDesktopPaths(): boolean {
  * The attach button (issue #285): the picker's twin of a file drop — files
  * stay where they are and only their quoted paths enter the draft, at the
  * caret of `editorRef` (a PathInput root). Any file type; the agent reads
- * what it can. Desktop only: a browser File has no local path, so there the
- * button explains instead (the drop zone's notice). The separate native
- * folder choice returns the directory itself, including an empty directory.
- * aria-disabled, not disabled, so the tooltip still shows.
+ * what it can. The desktop app uses its bridge; a browser asks the server for
+ * a native dialog (requestNativePaths). The separate folder choice returns the
+ * directory itself, including an empty directory.
  */
 export function AttachFilesButton({ editorRef }: { editorRef: React.RefObject<HTMLDivElement | null> }) {
 	const pickerRef = useRef<HTMLInputElement>(null);
 	const desktop = useDesktopPaths();
 	const buttonRef = useRef<HTMLButtonElement>(null);
 	const popupRef = useRef<HTMLDivElement>(null);
-	const choosingFolder = useRef(false);
+	const choosing = useRef(false);
 	const [open, setOpen] = useState(false);
 	const [notice, setNotice] = useState("");
 	const [placement, setPlacement] = useState<ReturnType<typeof attachmentPopupPlacement> | null>(null);
@@ -97,21 +110,36 @@ export function AttachFilesButton({ editorRef }: { editorRef: React.RefObject<HT
 		document.addEventListener("pointerdown", dismissOutside);
 		return () => document.removeEventListener("pointerdown", dismissOutside);
 	}, [open, notice]);
-	const chooseFolder = async () => {
-		if (choosingFolder.current) return;
-		const editor = editorRef.current;
-		const choose = window.lh?.chooseAttachmentFolder;
+	const chooseInBrowser = async (mode: "files" | "folder") => {
 		setOpen(false);
 		setNotice("");
-		if (!choose) { setNotice(BROWSER_NOTICE); return; }
-		choosingFolder.current = true;
+		if (choosing.current) return;
+		const editor = editorRef.current;
+		choosing.current = true;
+		try {
+			const chosen = await requestNativePaths(mode);
+			if (chosen === null) { setNotice(PICKER_UNAVAILABLE_NOTICE); return; }
+			const paths = mode === "folder" ? chosen.map(directoryReferencePath) : chosen;
+			// Cancelling is an empty list and leaves the draft intact.
+			if (paths.length > 0 && editor?.isConnected && editor === editorRef.current) editor.dispatchEvent(new CustomEvent(INSERT_FILE_PATHS_EVENT, { detail: paths }));
+		} catch { setNotice("Could not open the file picker. Try again."); }
+		finally { choosing.current = false; }
+	};
+	const chooseFolder = async () => {
+		const choose = window.lh?.chooseAttachmentFolder;
+		if (!choose) { await chooseInBrowser("folder"); return; }
+		if (choosing.current) return;
+		const editor = editorRef.current;
+		setOpen(false);
+		setNotice("");
+		choosing.current = true;
 		try {
 			const chosen = await choose();
 			if (chosen === null) return; // Native cancellation leaves the draft intact.
 			const path = directoryReferencePath(chosen);
 			if (editor?.isConnected && editor === editorRef.current) editor.dispatchEvent(new CustomEvent(INSERT_FILE_PATHS_EVENT, { detail: [path] }));
 		} catch { setNotice("Could not choose a folder. Try again."); }
-		finally { choosingFolder.current = false; }
+		finally { choosing.current = false; }
 	};
 	return (
 		<div className="relative shrink-0"
@@ -132,16 +160,16 @@ export function AttachFilesButton({ editorRef }: { editorRef: React.RefObject<HT
 					e.currentTarget.value = ""; // allow re-picking the same file
 				}}
 			/>
-			<Hint label={desktop ? "Attach files or a folder" : BROWSER_NOTICE}>
+			<Hint label="Attach files or a folder">
 				<button
 					ref={buttonRef}
 					type="button"
 					aria-label="Attach files"
-					aria-disabled={!desktop}
+					aria-disabled={false}
 					aria-haspopup="menu"
 					aria-expanded={open}
 					data-testid="attach-files"
-					onClick={() => { if (desktop) { setNotice(""); setOpen(!open); } }}
+					onClick={() => { setNotice(""); setOpen(!open); }}
 					className="flex size-10 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground aria-disabled:cursor-default aria-disabled:opacity-40 aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground"
 				>
 					<PaperclipIcon className="size-4" />
@@ -160,7 +188,11 @@ export function AttachFilesButton({ editorRef }: { editorRef: React.RefObject<HT
 				}}>
 				{open ? <>
 					<button type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-accent"
-						onClick={() => { setOpen(false); pickerRef.current?.click(); }}>Files</button>
+						onClick={() => {
+							if (!desktop) { void chooseInBrowser("files"); return; }
+							setOpen(false);
+							pickerRef.current?.click();
+						}}>Files</button>
 					<button type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-accent"
 						onClick={() => { void chooseFolder(); }}>Folder</button>
 				</> : notice}
