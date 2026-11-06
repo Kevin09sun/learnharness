@@ -67,7 +67,7 @@
 	--lh-heading-weight: 900;
 }
 
-/* The app is always dark (<html class="dark">); mirror the same values so
+/* Dark is the default (<html class="dark">); mirror the same values so
    the block stays coherent under Tailwind's variant. */
 .dark {
 	--background: #141414;
@@ -99,6 +99,35 @@
 	--lh-prose-size: 16px;
 	--lh-prose-leading: 1.5;
 	/* Markdown heading weight (appearance settings; 900 = the Black cut). */
+	--lh-heading-weight: 900;
+}
+
+/* Light mode (Settings → Appearance). Same structure as the dark palette:
+   raised surfaces and edges step away from the page, here downward. */
+.light {
+	color-scheme: light;
+	--background: #fbfbfa;
+	--foreground: #1f1f1f;
+	--card: #f3f3f1;
+	--card-foreground: #1f1f1f;
+	--popover: #ffffff;
+	--popover-foreground: #1f1f1f;
+	--primary: #1f1f1f;
+	--primary-foreground: #fbfbfa;
+	--secondary: #f3f3f1;
+	--secondary-foreground: #1f1f1f;
+	--muted: #f3f3f1;
+	--muted-foreground: #5f5f5f;
+	--accent: #e8e8e5;
+	--accent-foreground: #1f1f1f;
+	--destructive: oklch(0.577 0.245 27.325);
+	--border: #cfcfcb;
+	--input: #cfcfcb;
+	--ring: #7a7a7a;
+	--lh-ink-strong: var(--foreground);
+	--lh-ink-italic: var(--foreground);
+	--lh-prose-size: 16px;
+	--lh-prose-leading: 1.5;
 	--lh-heading-weight: 900;
 }
 
@@ -336,6 +365,10 @@ body {
 [data-streamdown="code-block"] {
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--background) 86%, black);
+}
+.light [data-streamdown="inline-code"],
+.light [data-streamdown="code-block"] {
+	background: var(--card);
 }
 [data-streamdown="code-block"] {
 	border-radius: 0.75rem;
