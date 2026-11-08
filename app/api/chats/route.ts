@@ -1,6 +1,6 @@
 import { chainsForSelection, formatChainLine } from "@/src/core";
 import { newGraphContextMessage, type GraphContextPick } from "@/src/core";
-import { compactionInFlight, createChat, isTurnRunning, listChats, readSettingsRecord, stores, titleFromPrompt } from "@/src/server";
+import { chatTokens, compactionInFlight, createChat, isTurnRunning, listChats, readSettingsRecord, stores, titleFromPrompt } from "@/src/server";
 import type { ChatListItem } from "@/src/core";
 
 /** The session picker's list: record-derived summaries (phase, pending
@@ -15,6 +15,7 @@ export async function GET() {
 		...c,
 		busy: isTurnRunning(c.id),
 		compacting: compactionInFlight(c.id),
+		tokens: chatTokens(c.id) ?? undefined,
 	}));
 	return Response.json({ chats });
 }

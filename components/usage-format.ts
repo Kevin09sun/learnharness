@@ -3,6 +3,8 @@
  * activity dock and the stats bar. Pure; exported for tests.
  */
 
+import type { TokenTotals } from "@/src/core";
+
 /** USD for cent-scale money: >= $1 keeps two decimals, smaller keeps four. */
 export function formatUsd(c: number): string {
 	return c >= 1 ? `$${c.toFixed(2)}` : `$${c.toFixed(4)}`;
@@ -18,6 +20,12 @@ export function formatTokens(n: number): string {
 	if (n >= 1e6) return `${+(n / 1e6).toFixed(1)}M`;
 	if (n >= 1e3) return `${+(n / 1e3).toFixed(1)}k`;
 	return String(n);
+}
+
+/** The hover text for a session's token counter. "New input" is fresh input
+ *  plus newly cached context; cache reads are earlier context re-read. */
+export function tokenBreakdown(t: TokenTotals): string {
+	return `${formatTokens(t.total)} tokens used: ${formatTokens(t.output)} output, ${formatTokens(t.input + t.cacheWrite)} new input, ${formatTokens(t.cacheRead)} cache reads. Includes background agents.`;
 }
 
 /** Split a provider-qualified stamp "provider:id" (the usage contracts'

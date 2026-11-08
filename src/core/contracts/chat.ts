@@ -277,6 +277,20 @@ export interface ChatSummary {
 	 *  summary spread (the picker never needs it from here; the full record
 	 *  is its source). */
 	settings?: ChatSettings;
+	/** The running token counter (core/session-tokens.ts), joined by the list
+	 *  route with the session's background jobs. */
+	tokens?: TokenTotals;
+}
+
+/** Everything a session caused, in tokens. `total` is every token the model
+ *  calls processed, cache re-reads included; the buckets are disjoint. */
+export interface TokenTotals {
+	total: number;
+	/** Fresh, uncached input. */
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
 }
 
 /** The sidebar's session row: a summary + live liveness. The chats list

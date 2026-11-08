@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { fuzzyScore } from "@/src/core";
 import { useServerEvent, useServerResync } from "@/components/server-events";
 import type { ChatListItem } from "@/src/core";
+import { formatTokens, tokenBreakdown } from "@/components/usage-format";
 import { kbdEventForAction } from "@/src/core";
 import { notifySettingsSaved } from "@/components/settings-signal";
 
@@ -273,6 +274,11 @@ export function timeAgo(iso: string, now = new Date()): string {
  *  still rides the API payload, so this is a one-line flip back if it's
  *  ever wanted. */
 function sessionMeta(chat: ChatListItem): string {
+	const tokens = chat.tokens?.total ? ` · ${formatTokens(chat.tokens.total)} tokens` : "";
+	return sessionState(chat) + tokens;
+}
+
+function sessionState(chat: ChatListItem): string {
 	if (chat.compacting) return `Compacting context · ${timeAgo(chat.updatedAt)}`;
 	if (chat.pendingQuestion) return `Waiting for input · ${timeAgo(chat.updatedAt)}`;
 	if ((chat.kind ?? "teach") === "practice" && chat.pendingProblem) {
@@ -280,6 +286,11 @@ function sessionMeta(chat: ChatListItem): string {
 	}
 	if (chat.busy) return "Working…";
 	return timeAgo(chat.updatedAt);
+}
+
+/** The counter's split, on hover. */
+function sessionMetaTitle(chat: ChatListItem): string | undefined {
+	return chat.tokens?.total ? tokenBreakdown(chat.tokens) : undefined;
 }
 
 /**
@@ -323,7 +334,7 @@ export function SessionRow({
 				    rule, finally applied to the picker too (owner, typography
 				    round): mono = chrome, Source Sans = human words. */}
 				<span className="block truncate font-prose text-(length:--lh-prose-size)">{chat.title}</span>
-				<span className="block text-xs text-muted-foreground">{sessionMeta(chat)}</span>
+				<span className="block text-xs text-muted-foreground" title={sessionMetaTitle(chat)}>{sessionMeta(chat)}</span>
 			</span>
 			{/* The dumbbell rides the FAR RIGHT (owner round 6, 2026-10-05) —
 			    was left of the name; right-aligned keeps the titles flush with
@@ -379,7 +390,7 @@ export function RenameRow({ chat, onCommit, onCancel }: { chat: ChatListItem; on
 					data-testid="session-rename-input"
 					className="lh-input w-full min-w-0 truncate border-0 border-b border-border bg-transparent px-0 text-foreground outline-none"
 				/>
-				<span className="block truncate text-xs text-muted-foreground">{sessionMeta(chat)}</span>
+				<span className="block truncate text-xs text-muted-foreground" title={sessionMetaTitle(chat)}>{sessionMeta(chat)}</span>
 			</span>
 		</div>
 	);

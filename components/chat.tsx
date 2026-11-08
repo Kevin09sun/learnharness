@@ -61,7 +61,7 @@ import { PracticeDock } from "@/components/practice-dock";
 import { ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
 import { GraphContextCard, type GraphContextData } from "@/components/graph-context-card";
 import { TopBar } from "@/components/top-bar";
-import type { ArtifactPartProps, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TurnUsage, SessionPricing } from "@/src/core";
+import type { ArtifactPartProps, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TokenTotals, TurnUsage, SessionPricing } from "@/src/core";
 import type { LhViewMessage } from "@/src/core";
 import { PhaseChip, PhaseDivider } from "@/components/phase-divider";
 import {
@@ -789,9 +789,10 @@ export function Chat({
 	const syncFromServer = useCallback(async () => {
 		const res = await fetch(`/api/chats/${chatId}`);
 		if (!res.ok) return;
-		const record = (await res.json()) as { messages?: LhMessage[]; turns?: TurnUsage[]; pricing?: SessionPricing; turnError?: string };
+		const record = (await res.json()) as { messages?: LhMessage[]; turns?: TurnUsage[]; pricing?: SessionPricing; tokens?: TokenTotals | null; turnError?: string };
 		if (Array.isArray(record.turns)) setTurns(record.turns);
 		setPricing(record.pricing);
+		setTokens(record.tokens ?? null);
 		if (!Array.isArray(record.messages)) return;
 		setMessages(record.messages, record.turnError);
 		// The continuation seam (contracts.ts protocol §4): a job result
@@ -925,6 +926,7 @@ export function Chat({
 	// fetches the record. No turns yet → the bar renders "—" everywhere.
 	const [turns, setTurns] = useState<TurnUsage[]>([]);
 	const [pricing, setPricing] = useState<SessionPricing | undefined>();
+	const [tokens, setTokens] = useState<TokenTotals | null>(null);
 	// The per-chat model control state (model-picker writes via PUT; the
 	// record is the source of truth, lifted here so the stats bar re-renders).
 	// The dock's reserved tail height (DockOverlay reports it; the spacer at
@@ -938,9 +940,10 @@ export function Chat({
 		try {
 			const res = await fetch(`/api/chats/${chatId}`);
 			if (!res.ok) return;
-			const record = (await res.json()) as { turns?: TurnUsage[]; pricing?: SessionPricing };
+			const record = (await res.json()) as { turns?: TurnUsage[]; pricing?: SessionPricing; tokens?: TokenTotals | null };
 			if (Array.isArray(record.turns)) setTurns(record.turns);
 			setPricing(record.pricing);
+			setTokens(record.tokens ?? null);
 		} catch {
 			// transient blip: stats stay on the last known figures
 		}
@@ -1711,6 +1714,7 @@ export function Chat({
 					contextTokens={contextTokens}
 					cliContextWindow={cliContextWindowOf(nativeMessages)}
 					pricing={pricing}
+					tokens={tokens}
 					onReserve={setDockReserve}
 					dictationSlot={<DictationBar dictation={dictation} />}
 					dictationCancel={dictation.cancel}
@@ -1941,6 +1945,7 @@ function DockOverlay({
 	contextTokens,
 	cliContextWindow,
 	pricing,
+	tokens,
 	composer,
 	onSubmitAnswer,
 	chatId,
@@ -1979,6 +1984,7 @@ function DockOverlay({
 	contextTokens: number | null;
 	cliContextWindow: ReturnType<typeof cliContextWindowOf>;
 	pricing?: SessionPricing;
+	tokens: TokenTotals | null;
 	composer: React.ReactNode;
 	onSubmitAnswer: (output: QuestionAnswerData) => void;
 	/** The model control's pass-through (the stats bar hosts it). */
@@ -2436,6 +2442,7 @@ function DockOverlay({
 						contextTokens={contextTokens}
 						cliContextWindow={cliContextWindow}
 						pricing={pricing}
+						tokens={tokens}
 						dictationSlot={dictationSlot}
 						chatId={chatId}
 						onModelChange={onModelChange}

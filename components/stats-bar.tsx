@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { CLAUDE_CODE_PROVIDER, sessionCacheHitRate, subscriptionLabels, subscriptionLabel, type cliContextWindowOf, type SessionPricing, type TurnUsage } from "@/src/core";
-import { formatTokens, formatUsd, planCostLabel, prettyModel } from "@/components/usage-format";
+import { CLAUDE_CODE_PROVIDER, sessionCacheHitRate, subscriptionLabels, subscriptionLabel, type cliContextWindowOf, type SessionPricing, type TokenTotals, type TurnUsage } from "@/src/core";
+import { formatTokens, formatUsd, planCostLabel, prettyModel, tokenBreakdown } from "@/components/usage-format";
 import { ModelControl, catalogLimits, useModelCatalog } from "@/components/model-picker";
 
 export function formatContextMeasurement(tokens: number | null, limit: number | null): string {
@@ -42,12 +42,15 @@ export function StatsBar({
 	contextTokens = null,
 	cliContextWindow = null,
 	pricing,
+	tokens,
 	dictationSlot,
 	chatId,
 	leadingSlot,
 	onModelChange,
 }: {
 	turns: TurnUsage[];
+	/** The session's running token counter, background agents included. */
+	tokens?: TokenTotals | null;
 	contextTokens?: number | null;
 	cliContextWindow?: ReturnType<typeof cliContextWindowOf>;
 	pricing?: SessionPricing;
@@ -148,6 +151,12 @@ export function StatsBar({
 					{contextLabel}
 				</span>
 				<span aria-hidden>·</span>
+				{tokens?.total ? (
+					<>
+						<span data-testid="stats-tokens" title={tokenBreakdown(tokens)}>{formatTokens(tokens.total)} tokens</span>
+						<span aria-hidden>·</span>
+					</>
+				) : null}
 				<span data-testid="stats-cost">{costLabel}</span>
 			</button>
 				{open && (
@@ -172,6 +181,21 @@ export function StatsBar({
 								<span>{subscription ? "Usage" : "Total cost"}</span>
 								<span className="tabular-nums text-card-foreground">{costLabel}</span>
 							</div>
+							{tokens?.total ? (
+								<>
+									<div data-testid="stats-tokens-detail" className="flex justify-between gap-2">
+										<span>Tokens used</span>
+										<span className="tabular-nums text-card-foreground">{formatTokens(tokens.total)}</span>
+									</div>
+									{([["Output", tokens.output], ["New input", tokens.input + tokens.cacheWrite], ["Cache reads", tokens.cacheRead]] as const).map(([label, n]) => (
+										<div key={label} className="flex justify-between gap-2 pl-3">
+											<span>{label}</span>
+											<span className="tabular-nums text-card-foreground">{formatTokens(n)}</span>
+										</div>
+									))}
+									<p>Includes background agents.</p>
+								</>
+							) : null}
 							{cacheHitRate !== null && (
 								<div data-testid="stats-cache-hit-rate" className="flex justify-between gap-2">
 									<span>Cache hit rate</span>
