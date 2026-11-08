@@ -137,3 +137,35 @@ describe("Settings mode control", () => {
 		assert.match(html, /<option value="light" selected[^>]*>Light<\/option>/);
 	});
 });
+
+describe("light mode readability", () => {
+	it("every translucent text colour the components use is readable on the light page", async () => {
+		const { readdirSync } = await import("node:fs");
+		const files = readdirSync(new URL("../components", import.meta.url), { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".tsx"));
+		const used = new Set<string>();
+		for (const f of files) {
+			const source = readFileSync(new URL(`../components/${f.replaceAll("\\", "/")}`, import.meta.url), "utf8");
+			for (const m of source.matchAll(/\b(?:placeholder:)?text-(?:muted-foreground|foreground|card-foreground)\/\d+/g)) used.add(m[0]);
+		}
+		assert.ok(used.size > 5, "found the translucent text classes");
+		for (const cls of used) {
+			const escaped = "." + cls.replace(/[:/]/g, (c) => "\\" + c);
+			assert.ok(css.includes(escaped), `${cls} has a light-mode override in globals.css`);
+		}
+	});
+
+	it("graph region labels are dark on the light page and unchanged on dark", async () => {
+		const { regionLabelColor } = await import("../components/graph-canvas.ts");
+		assert.equal(regionLabelColor(120, "dark"), "hsla(120, 55%, 78%, 0.85)");
+		const lightness = Number(regionLabelColor(120, "light").match(/,\s*(\d+)%,\s*[\d.]+\)$/)?.[1]);
+		assert.ok(lightness <= 32, `light label lightness ${lightness}%`);
+	});
+
+	it("the logo's ring follows the theme instead of being fixed white", async () => {
+		const { LhMark } = await import("../components/lh-mark.tsx");
+		const html = renderToStaticMarkup(<LhMark />);
+		assert.doesNotMatch(html, /fill:\s*#fff/);
+		assert.match(html, /var\(--lh-mark-ring/);
+		assert.ok(block(".light")["--lh-mark-ring"], "light palette sets the ring colour");
+	});
+});

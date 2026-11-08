@@ -117,6 +117,13 @@ export interface CanvasColors {
 	edge: string;
 	label: string;
 	hoverText: string;
+	/** The page's theme: region labels need dark ink on a light page. */
+	mode: "dark" | "light";
+}
+
+/** Region label ink: pale on the dark page, deep on the light one. */
+export function regionLabelColor(hue: number, mode: "dark" | "light"): string {
+	return mode === "light" ? `hsla(${hue}, 60%, 30%, 0.95)` : `hsla(${hue}, 55%, 78%, 0.85)`;
 }
 
 export interface CanvasData {
@@ -1725,7 +1732,7 @@ export class GraphCanvasRenderer {
 			const lineH = (settings.clusterLabelSize * REGION_LABEL_LINE_HEIGHT) / k;
 			for (const rm of this.regionMeta) {
 				if (!rm.lines) continue;
-				ctx.fillStyle = `hsla(${rm.hue}, 55%, 78%, 0.85)`;
+				ctx.fillStyle = regionLabelColor(rm.hue, data.colors.mode);
 				const firstOffset = (-(rm.lines.length - 1) / 2) * lineH;
 				for (let i = 0; i < rm.lines.length; i++) {
 					ctx.fillText(rm.lines[i]!, rm.cx, rm.cy + firstOffset + i * lineH);

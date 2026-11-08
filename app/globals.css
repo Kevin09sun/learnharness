@@ -129,6 +129,32 @@
 	--lh-prose-size: 16px;
 	--lh-prose-leading: 1.5;
 	--lh-heading-weight: 900;
+	/* The logo's ring is white on dark; on light it takes the text color. */
+	--lh-mark-ring: var(--foreground);
+}
+
+/* Light mode readability. Faded text (text-…/70 and friends) was tuned for
+   the dark page; on the light one it falls under 4.5:1 contrast. Show it at
+   full muted strength instead. In the utilities layer with :where() so the
+   specificity matches the class it replaces: hover/focus variants still win. */
+@layer utilities {
+	:where(.light) .text-muted-foreground\/40,
+	:where(.light) .text-muted-foreground\/50,
+	:where(.light) .text-muted-foreground\/60,
+	:where(.light) .text-muted-foreground\/70,
+	:where(.light) .text-muted-foreground\/80,
+	:where(.light) .text-foreground\/50,
+	:where(.light) .text-foreground\/70 {
+		color: var(--muted-foreground);
+	}
+	:where(.light) .text-foreground\/80,
+	:where(.light) .text-foreground\/85 {
+		color: color-mix(in oklab, var(--foreground) 85%, var(--background));
+	}
+	:where(.light) .placeholder\:text-muted-foreground\/60::placeholder,
+	:where(.light) .placeholder\:text-muted-foreground\/70::placeholder {
+		color: var(--muted-foreground);
+	}
 }
 
 /* CMU Serif bold (titles) — bundled local file, no CDN dependency. */

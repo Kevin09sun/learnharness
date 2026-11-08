@@ -63,7 +63,7 @@
  * camera never moves.
  */
 
-import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { NotesImportControl, NotesImportErrors, NotesImportNotices, useNotesImport } from "@/components/notes-import.tsx";
 import Link from "next/link";
 import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, WaypointsIcon } from "lucide-react";
@@ -208,6 +208,21 @@ function cssColorToHex(css: string): string {
 	return `#${[data[0]!, data[1]!, data[2]!]
 		.map((v) => v.toString(16).padStart(2, "0"))
 		.join("")}`;
+}
+
+/** The theme class actually on <html> (the appearance provider swaps it).
+ *  Watching the DOM, not the setting, so colors are read after the swap. */
+function subscribeThemeClass(onChange: () => void): () => void {
+	const observer = new MutationObserver(onChange);
+	observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+	return () => observer.disconnect();
+}
+function useThemeMode(): "dark" | "light" {
+	return useSyncExternalStore(
+		subscribeThemeClass,
+		() => (document.documentElement.classList.contains("light") ? "light" : "dark"),
+		() => "dark",
+	);
 }
 
 function tokenHex(cssVar: string): string {
@@ -1383,6 +1398,8 @@ export function GraphView({
 	// Feed #1 — data: positions + edges + clusters + resolved colors. Runs
 	// after the layout effect (same commit, declaration order) and after
 	// the construct effect, so the renderer exists and positions are fresh.
+	// A theme switch re-sends the data so the canvas re-reads its colors.
+	const themeMode = useThemeMode();
 	useEffect(() => {
 		const renderer = rendererRef.current;
 		const positions = posRef.current;
@@ -1403,11 +1420,12 @@ export function GraphView({
 				edge: tokenHex("--ring"),
 				label: tokenHex("--muted-foreground"),
 				hoverText: tokenHex("--foreground"),
+				mode: themeMode,
 			},
 			// Match the app typography (Geist via the body's stack).
 			fontFamily: getComputedStyle(document.body).fontFamily,
 		});
-	}, [snapshot, isEmpty]);
+	}, [snapshot, isEmpty, themeMode]);
 
 	// Feed #2 — settings: just marks the frame dirty. No rebuild, no
 	// re-layout, no camera touch (the whole point of the new renderer).
