@@ -61,7 +61,7 @@ import { CONFIDENCE_COLORS, confidenceRailStyle } from "@/components/confidence-
  */
 
 export interface QuestionDockProps {
-	toolName: "quiz" | "probe" | "ask_user_question" | "explain" | "recall";
+	toolName: "quiz" | "probe" | "ask_user_question" | "explain" | "recall" | "check_point";
 	toolCallId: string;
 	input: QuizToolInput | AskToolInput | ExplainToolInput;
 	/** Collapse state, owned by the DockOverlay (it drives the shell's height morph). */
@@ -118,12 +118,15 @@ export function QuestionDock({
 	// teach twins for every dock concern — parse dispatch, labels, kinds:
 	// the probe quiz ("probe") is quiz-shaped, the probe free-recall
 	// ("recall") is explain-shaped. Old records keep the teach names.
+	// Test prep's check_point is explain-shaped too, but keeps its own
+	// "Check" label.
 	const canonical =
-		toolName === "probe" ? "quiz" : toolName === "recall" ? "explain" : toolName;
+		toolName === "probe" ? "quiz" : toolName === "recall" || toolName === "check_point" ? "explain" : toolName;
 	// The chip's display name carries the tool's OWN name (owner
 	// 2026-10-09): probe-phase questions label Probe/Recall in the
-	// composer; teach tools keep the standing labels.
-	const toolLabel = toolName === "probe" ? "Probe" : toolName === "recall" ? "Recall" : undefined;
+	// composer; check_point labels Check; teach tools keep the standing
+	// labels.
+	const toolLabel = toolName === "probe" ? "Probe" : toolName === "recall" ? "Recall" : toolName === "check_point" ? "Check" : undefined;
 	// Parse, don't cast (src/core/tool-parts.ts): the model authored this
 	// input, and only the schema the tool declared vouches for its shape.
 	// The dock mounts on input-available parts (already validated at the
@@ -568,13 +571,15 @@ function QuestionDockForm({
 						? "Probe"
 						: toolName === "recall"
 							? "Recall"
-							: kind === "quiz"
-								? qd.questionType === "predict"
-									? "Prediction"
-									: "Check"
+							: toolName === "check_point"
+								? "Check"
+								: kind === "quiz"
+									? qd.questionType === "predict"
+										? "Prediction"
+										: "Check"
 									: kind === "explain"
 										? "Explain"
-											: "Question"}
+										: "Question"}
 					{qd.mode === "multi-select" && " · select all that apply"}
 				</div>
 				<div className="mb-3 font-medium">

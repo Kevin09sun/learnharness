@@ -118,7 +118,7 @@ export function parseExplainInput(input: unknown): ExplainToolInput | undefined 
 export function parseQuestionInput(tool: string, input: unknown): QuizToolInput | AskToolInput | ExplainToolInput | undefined {
 	switch (tool) {
 		case "quiz": case "probe": return parseQuizInput(input);
-		case "explain": case "recall": return parseExplainInput(input);
+		case "explain": case "recall": case "check_point": return parseExplainInput(input);
 		case "ask_user_question": return parseAskInput(input);
 		default: return undefined;
 	}

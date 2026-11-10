@@ -745,7 +745,11 @@ export function buildAnswer(qd: QuestionData, req: AnswerRequest, tool?: string)
 	if (qd.kind === "explain") {
 		// No client grading — the model grades in its reply, against the
 		// commitment. The commitment snapshots for the reveal + rendering.
-		base.committed = qd.committedAnswer;
+		// Test prep's check_point is the exception: the learner never sees
+		// the commitment (spec 2026-11-10, a correct answer gets a ✓ only),
+		// so it stays in the persisted call args like practice's hidden
+		// modelSolution and never enters the answer record.
+		if (tool !== "check_point") base.committed = qd.committedAnswer;
 	}
 	return base;
 }

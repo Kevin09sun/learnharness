@@ -13,7 +13,14 @@ export function answerForPresentation(answer: QuestionAnswerData, input: unknown
 	if (!source) return answer;
 	const projected = { ...answer, questionText: source.question };
 	if (quiz) projected.explanation = quiz.explanation;
-	if (explain) projected.committed = explain.correctAnswer;
+	if (explain) {
+		// check_point (test prep) commits an answer the learner must NEVER see:
+		// a correct answer gets a ✓ only (spec 2026-11-10). The commitment
+		// stays in the persisted call args, like practice's hidden
+		// modelSolution — never in the presentation.
+		if (answer.tool === "check_point") delete projected.committed;
+		else projected.committed = explain.correctAnswer;
+	}
 	if (!answer.options?.length || !("options" in source) || !source.options?.length) return projected;
 
 	const original = normalizeOptions(source.options);

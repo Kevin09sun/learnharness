@@ -71,13 +71,15 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 					? "Probe"
 					: answer.tool === "recall"
 						? "Recall"
-						: isQuiz
+						: answer.tool === "check_point"
+							? "Check"
+							: isQuiz
 								? answer.questionType === "predict"
 									? "Prediction"
 									: "Check"
-									: isExplain
-										? "Explain"
-											: "Question"}
+								: isExplain
+									? "Explain"
+										: "Question"}
 				{isQuiz &&
 					(answer.dontKnow ? (
 						<span className="rounded bg-muted px-1.5 py-0.5">didn't know</span>
@@ -223,8 +225,10 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 
 			{/* The explain reveal (owner ruling 2026-09-27): the committed answer
 			    — one field, reasoning included — shown on submit; no verdict,
-			    the model's next reply IS the grading. */}
-			{isExplain && answer.committed && (
+			    the model's next reply IS the grading. Test prep's check_point
+			    is the exception (spec 2026-11-10): the commitment is never
+			    shown, correct or wrong — a ✓ only. */}
+			{isExplain && answer.tool !== "check_point" && answer.committed && (
 				<div className="mt-3 rounded-lg bg-muted py-2 text-sm text-muted-foreground">
 					<span className="font-medium text-foreground">The answer: </span>
 					<ToolContentResponse className="inline [&>p:first-child]:inline [&>p:first-child]:m-0">{answer.committed}</ToolContentResponse>
