@@ -1,3 +1,24 @@
+> **Fork of [amosblomqvist/learnharness](https://github.com/amosblomqvist/learnharness)** by Kevin09sun. Licensed AGPL-3.0 like the original.
+
+## What's different in this fork
+
+- **Light mode**, plus readability fixes for faded text, graph labels and the logo
+- **Running token counter** for each session
+- **Teach from your materials:** the teacher uses the files and folders you point it at
+- **Visual file and folder picker** in the web version
+- **Windows scripts:** setup, autostart and data sync
+
+## Planned
+
+- Use it on your phone from a link, with sessions synced across devices
+- Fix the paperclip file/folder picker
+- Fix voice dictation (Deepgram permissions)
+- Additional sidebar features
+
+The original README follows.
+
+---
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/lh_banner_dark.png">
