@@ -90,3 +90,7 @@ export * from "./coverage.ts";
 // ONE session→markdown formatter — the extractor's view and the user-facing
 // export share it. Pure, browser-safe.
 export * from "./session-markdown.ts";
+// test-prep.ts: the Test prep session type's pure core — statuses, readiness,
+// question order and plan merging (browser-safe; the shell's readiness view
+// binds to these types).
+export * from "./test-prep.ts";
