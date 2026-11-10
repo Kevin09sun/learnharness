@@ -17,6 +17,7 @@ import { applyResult } from "../src/core/test-prep.ts";
 import type { PlanDraftSection, TestRecord } from "../src/core/test-prep.ts";
 import { QUESTION_TOOLS, toolQuestionKind } from "../src/core/pending.ts";
 import {
+	checkPointInputObject,
 	testPrepTools,
 	type TestPrepToolContext,
 } from "../src/agent/tools/test-prep.ts";
@@ -226,6 +227,14 @@ describe("check_point", () => {
 		assert.match(tool.description, /✓/);
 	});
 
+	it("overrides the inherited correctAnswer description — no 'shown to him' leak", () => {
+		const description =
+			(checkPointInputObject.properties.correctAnswer as { description?: string }).description ?? "";
+		assert.doesNotMatch(description, /shown to him/i);
+		assert.match(description, /never shown to the learner/i);
+		assert.match(description, /COMMITTED before/i);
+	});
+
 	it("enforces the explain commitment rule (empty correctAnswer refuses)", async () => {
 		const { tests } = fakeTests(recordOf());
 		const tool = testPrepTools(ctxOf(tests)).check_point!;
@@ -292,6 +301,31 @@ describe("test_progress", () => {
 		assert.ok(unchecked >= 0, "the unchecked line is present in the documented format");
 		assert.ok(recheck < unchecked, "re-checks come before unchecked points");
 		assert.ok(text.indexOf("p_gap · gap · Genetics › Punnett squares") > unchecked, "gaps come last");
+	});
+
+	it("never rounds a near-perfect ratio up to 100% (100% = every point solid)", async () => {
+		const many: TestRecord = recordOf({
+			sections: [
+				{
+					id: "sec_big",
+					title: "Big",
+					points: Array.from({ length: 200 }, (_, i) => ({
+						id: `p_${i}`,
+						text: `Point ${i}`,
+						source: "outline",
+						status: i === 199 ? ("unchecked" as const) : ("solid" as const),
+						history: [],
+					})),
+				},
+			],
+		});
+		const { tests } = fakeTests(many);
+		const tool = testPrepTools(ctxOf(tests)).test_progress!;
+		const result = await tool.execute("call_p", {} as never);
+		const text = (result.content[0] as { text: string }).text;
+		assert.match(text, /Ready: 99%/);
+		assert.doesNotMatch(text, /Ready: 100%/);
+		assert.match(text, /Big: 99%/);
 	});
 
 	it("caps the queue at 30 lines", async () => {

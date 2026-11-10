@@ -51,8 +51,10 @@ function textResult(text: string): AgentToolResult<string> {
 	return { content: [{ type: "text", text }], details: text };
 }
 
+/** Readiness never rounds up into a perfect score: 100% is reserved for
+ *  every point solid (199/200 is 99%, not 100%). */
 function percent(ratio: number): string {
-	return `${Math.round(ratio * 100)}%`;
+	return `${ratio === 1 ? 100 : Math.floor(ratio * 100)}%`;
 }
 
 function locatePoint(test: TestRecord, pointId: string) {
@@ -189,6 +191,17 @@ export const checkPointInputObject = Type.Object({
 			"Validated against the confirmed plan; an unknown id is rejected.",
 	}),
 	...explainInputBase.properties,
+	// OVERRIDE the inherited explain description: its "shown to him on
+	// submit" sentence is false for test prep — the learner sees only the
+	// ✓ verdict or the agent's explanation.
+	correctAnswer: Type.String({
+		description:
+			"REQUIRED. The full correct answer in your own words, reasoning included — COMMITTED before the learner " +
+			"ever sees the question. The commitment is immutable: when his answer returns, grade it strictly against this " +
+			"text — never revise the commitment after seeing his words, and never mark a wrong answer right to be kind. " +
+			"The committed answer is NEVER shown to the learner: he sees only a ✓ verdict when right, or your " +
+			"explanation when wrong.",
+	}),
 });
 
 function checkPointTool(ctx: TestPrepToolContext): AgentTool<typeof checkPointInputObject> {
