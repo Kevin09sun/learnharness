@@ -14,7 +14,7 @@ Everything the learner sees is ordinary prose and one short-answer question at a
 
 **`record_result`** — applies the graded outcome for one point: `correct`, `wrong`, or `dontKnow`. Call it immediately after grading, before you speak. It returns the point's new status and overall readiness.
 
-**The side tools** — `read`, `ls`, `find`, `grep` over the learner's files (PDFs through the pdf job). They are read-only. Use them to scope the test: locate the outline or slides the learner points at.
+**The side tools** — `read`, `ls`, `find`, `grep` over the learner's files, PDFs through the `pdf` job, and research through `research` when it is available. All are read-only. Use them to scope the test: locate and read the outline or slides the learner points at.
 
 ## Accuracy
 

@@ -484,6 +484,15 @@ export async function handleChatInput(
 						// The record guard above refuses a testprep turn without a testId.
 						testId: record.testId!,
 						tests: stores.testStore,
+						// The rarely-needed set, wired exactly like practice's: the
+						// research + pdf jobs. Outlines and slides are usually PDFs,
+						// so the pdf job is load-bearing for scoping a test.
+						jobs: {
+							chatId,
+							jobStore: stores.jobStore,
+							spawn: (job, input) => void jobRunner.runJob(job.id, input),
+							searchAvailable,
+						},
 					},
 					agentOpts,
 				)

@@ -151,6 +151,17 @@ describe("testPrepTools registry", () => {
 		]);
 	});
 
+	it("wires the pdf job when a jobs context is passed — and omits it without one", () => {
+		// Outlines and slides are usually PDFs: without the job context the
+		// agent could not read the folder it was pointed at.
+		const plain = testPrepTools(ctxOf(fakeTests(recordOf()).tests));
+		assert.equal(plain.pdf, undefined);
+		const jobs = { chatId: "chat_now", jobStore: null as never, spawn: (() => {}) as never, searchAvailable: () => false };
+		const withJobs = testPrepTools({ ...ctxOf(fakeTests(recordOf()).tests), jobs });
+		assert.ok(withJobs.pdf, "pdf job present with a jobs context");
+		assert.ok(withJobs.research, "the same job set practice carries");
+	});
+
 	it("check_point is a question tool: it folds onto the explain kind (the turn pauses)", () => {
 		assert.ok((QUESTION_TOOLS as readonly string[]).includes("check_point"));
 		assert.equal(toolQuestionKind("check_point"), "explain");

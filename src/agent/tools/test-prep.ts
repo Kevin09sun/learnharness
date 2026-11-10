@@ -28,6 +28,7 @@ import { readTool } from "./read.ts";
 import { lsTool } from "./ls.ts";
 import { findTool } from "./find.ts";
 import { grepTool } from "./grep.ts";
+import { jobTools, type JobToolContext } from "./jobs.ts";
 
 /** The storage port this toolset closes over — the three test-record
  *  operations it needs, structurally satisfied by store/tests.ts. The agent
@@ -44,6 +45,11 @@ export interface TestPrepToolContext {
 	chatId: string;
 	testId: string;
 	tests: TestPrepStore;
+	/** THE RARELY-NEEDED SET (the practice-tools idiom, 2026-11-10): the
+	 *  research + pdf jobs, injected by the composition root. Outlines and
+	 *  slides are usually PDFs, so the pdf job matters here. Absent (tests,
+	 *  wiring bugs) = absent from the registry. */
+	jobs?: JobToolContext;
 }
 
 /** Plain-text result (these tools answer the model in prose, not JSON). */
@@ -278,6 +284,11 @@ function recordResultTool(ctx: TestPrepToolContext): AgentTool<typeof recordResu
 
 /** The test-prep toolset (the test-prep agent's whole registry). */
 export function testPrepTools(ctx: TestPrepToolContext): Record<string, AgentTool<any>> {
+	// THE RARELY-NEEDED SET (the practice-tools idiom): the research + pdf
+	// jobs (demo/visual stay teach-only), absent when no jobs context was
+	// injected. Outlines and slides are usually PDFs, so the pdf job is how
+	// the agent reads the folder it was pointed at.
+	const jobs = ctx.jobs ? jobTools(ctx.jobs) : null;
 	// healToolRecord — the standard argument heal over the WHOLE registry
 	// (the practice/teacher/prober convention). The per-tool prepareArguments
 	// above is the composed inner pass; the double heal is idempotent.
@@ -290,5 +301,7 @@ export function testPrepTools(ctx: TestPrepToolContext): Record<string, AgentToo
 		ls: lsTool,
 		find: findTool,
 		grep: grepTool,
+		...(jobs?.research ? { research: jobs.research } : {}),
+		...(jobs ? { pdf: jobs.pdf! } : {}),
 	});
 }
