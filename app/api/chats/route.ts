@@ -21,12 +21,35 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-	const body = (await req.json().catch(() => ({}))) as { title?: unknown; kind?: unknown; graphContext?: unknown };
+	const body = (await req.json().catch(() => ({}))) as {
+		title?: unknown;
+		kind?: unknown;
+		graphContext?: unknown;
+		testTitle?: unknown;
+		testId?: unknown;
+	};
 	const title = typeof body.title === "string" ? body.title : "";
 	// Practice sessions (owner, 2026-10-04): kind "practice" marks the
 	// record — the practice agent + its tools from turn 1, no extraction.
-	const kind = body.kind === "practice" ? ("practice" as const) : undefined;
-	const chat = createChat(titleFromPrompt(title || "Untitled session"), kind);
+	// Test prep sessions (2026-11-10) name a test: either a new one
+	// (testTitle, created here) or an existing record (testId). Exactly one
+	// is required — anything else is an honest 400.
+	let testId: string | undefined;
+	if (body.kind === "testprep") {
+		const testTitle = typeof body.testTitle === "string" ? body.testTitle.trim() : "";
+		const requestedTestId = typeof body.testId === "string" ? body.testId.trim() : "";
+		if ((testTitle !== "") === (requestedTestId !== "")) {
+			return Response.json({ error: "Test prep sessions need exactly one of testTitle or testId." }, { status: 400 });
+		}
+		if (requestedTestId !== "") {
+			if (!stores.testStore.get(requestedTestId)) return Response.json({ error: "Unknown test" }, { status: 404 });
+			testId = requestedTestId;
+		} else {
+			testId = stores.testStore.create(testTitle).id;
+		}
+	}
+	const kind = body.kind === "practice" ? ("practice" as const) : body.kind === "testprep" ? ("testprep" as const) : undefined;
+	const chat = createChat(titleFromPrompt(title || "Untitled session"), kind, testId);
 	// PER-SESSION MODELS (owner, 2026-09-28): a session owns its model +
 	// thinking level from birth — stamped verbatim from the STRONG slot,
 	// the new-session default. From here the strong slot never reaches
@@ -68,5 +91,5 @@ export async function POST(req: Request) {
 		);
 		stores.chatStore.saveMessages(chat.id, [newGraphContextMessage(picks, chainLines)]);
 	}
-	return Response.json({ id: chat.id, title: chat.title });
+	return Response.json({ id: chat.id, title: chat.title, ...(testId === undefined ? {} : { testId }) });
 }

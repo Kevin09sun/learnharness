@@ -20,6 +20,8 @@ const TMP_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "lh-chat-kind-"));
 process.env.LH_DATA_DIR = TMP_DATA;
 
 const { chatStore } = await import("../src/store/chats.ts");
+const { testStore } = await import("../src/store/tests.ts");
+const { POST } = await import("../app/api/chats/route.ts");
 const { PRACTICE_PROBLEM_TOOL, PRACTICE_CONCLUDE_TOOL, newProblemDismissedMarker, newThinkingMessage, newUserMessage } = await import("../src/core/native-messages.ts");
 
 type LhMessage = import("../src/core/native-messages.ts").LhMessage;
@@ -149,4 +151,70 @@ describe("session kind (practice sessions, 2026-10-04)", () => {
 			assert.equal(chatStore.listChats().find((c) => c.id === chat.id)?.pendingProblem, false);
 		});
 	}
+});
+
+describe("test prep sessions (2026-11-10)", () => {
+	it("createChat(kind: 'testprep') stamps kind + testId on the record and the list summary", () => {
+		const chat = chatStore.createChat("Bio midterm", "testprep", "test_1");
+		assert.equal(chat.kind, "testprep");
+		assert.equal(chat.testId, "test_1");
+		const stored = chatStore.getChat(chat.id);
+		assert.equal(stored?.kind, "testprep");
+		assert.equal(stored?.testId, "test_1");
+		const listed = chatStore.listChats().find((c) => c.id === chat.id);
+		assert.equal(listed?.kind, "testprep");
+		assert.equal(listed?.testId, "test_1");
+	});
+
+	it("a teach chat still carries no kind key and no testId", () => {
+		const chat = chatStore.createChat("plain teach");
+		assert.equal("kind" in chat, false);
+		assert.equal("testId" in chat, false);
+		assert.equal("testId" in chatStore.getChat(chat.id)!, false);
+	});
+
+	function post(body: unknown): Promise<Response> {
+		return POST(new Request("http://test/api/chats", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		}));
+	}
+
+	it("POST /api/chats creates a test from testTitle and links the chat to it", async () => {
+		const res = await post({ title: "Bio midterm", kind: "testprep", testTitle: "Bio midterm" });
+		assert.equal(res.status, 200);
+		const { id, testId } = (await res.json()) as { id: string; testId: string };
+		assert.equal(testStore.get(testId)?.title, "Bio midterm");
+		assert.equal(chatStore.getChat(id)?.kind, "testprep");
+		assert.equal(chatStore.getChat(id)?.testId, testId);
+	});
+
+	it("POST /api/chats links an existing test from testId without creating another", async () => {
+		const existing = testStore.create("Existing test");
+		const countBefore = testStore.list().length;
+		const res = await post({ title: "Continue", kind: "testprep", testId: existing.id });
+		assert.equal(res.status, 200);
+		const { id, testId } = (await res.json()) as { id: string; testId: string };
+		assert.equal(testId, existing.id);
+		assert.equal(chatStore.getChat(id)?.testId, existing.id);
+		assert.equal(testStore.list().length, countBefore);
+	});
+
+	it("POST /api/chats refuses an unknown testId with a 404 JSON error", async () => {
+		const res = await post({ title: "Ghost", kind: "testprep", testId: "test_never_existed" });
+		assert.equal(res.status, 404);
+		const body = (await res.json()) as { error: string };
+		assert.equal(typeof body.error, "string");
+	});
+
+	it("POST /api/chats refuses test prep with neither, both, or a blank testTitle (400)", async () => {
+		for (const body of [
+			{ title: "None", kind: "testprep" },
+			{ title: "Both", kind: "testprep", testTitle: "A", testId: "test_1" },
+			{ title: "Blank title", kind: "testprep", testTitle: "   " },
+		]) {
+			assert.equal((await post(body)).status, 400, JSON.stringify(body));
+		}
+	});
 });

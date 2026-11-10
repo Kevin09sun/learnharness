@@ -102,8 +102,9 @@ export interface CompactionDeps {
 	engine: PiEngine;
 	/** provider:id of the engine (usage + marker provenance). */
 	modelId: string;
-	/** The session kind (summarizer wording: tutor vs practice). */
-	kind: "teach" | "practice" | "probe";
+	/** The session kind (summarizer wording: tutor vs practice; testprep
+	 *  reads like teach). */
+	kind: "teach" | "practice" | "probe" | "testprep";
 	/** The effective trigger threshold, RESOLVED by the caller:
 	 *  min(settings threshold, contextWindow − reserve) — the owner's
 	 *  effective-trigger ruling. The catalog window lookup is the

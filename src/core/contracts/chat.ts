@@ -24,8 +24,10 @@ import type { EmissionStats } from "./graph.ts";
 /** The session's kind (practice sessions, owner 2026-10-04): "teach" is
  *  the default and ABSENT on pre-practice records (no migration — absence
  *  reads as teach); "practice" marks an adaptive-practice session — the
- *  practice agent, its two tools, no extraction, no graph writes. */
-export type ChatKind = "teach" | "practice";
+ *  practice agent, its two tools, no extraction, no graph writes.
+ *  "testprep" (2026-11-10) marks a Test prep session linked to a test
+ *  record — it extracts like teach (spec "Knowledge graph"). */
+export type ChatKind = "teach" | "practice" | "testprep";
 
 export interface ChatRecord {
 	id: string;
@@ -37,6 +39,8 @@ export interface ChatRecord {
 	imageSnapshots?: Record<string, ImageSnapshot>;
 	/** The session's kind — absent = teach (pre-practice records). */
 	kind?: ChatKind;
+	/** Test prep sessions: the test record this session prepares for. */
+	testId?: string;
 	/** The session's plan tree (vision §2) — written by plan tools via saveTree. */
 	tree?: PlanTree;
 	/** Append-only usage log (observability, 2026-09): one entry per model
@@ -265,6 +269,8 @@ export interface ChatSummary {
 	updatedAt: string;
 	/** Normalized kind (absent record field reads as teach). */
 	kind: ChatKind;
+	/** Test prep sessions: the linked test record (absent on other kinds). */
+	testId?: string;
 	messageCount: number;
 	/** The session's current phase, derived from the stored plan tree. */
 	phase: Phase3;
