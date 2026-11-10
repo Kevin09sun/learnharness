@@ -51,10 +51,13 @@ function textResult(text: string): AgentToolResult<string> {
 	return { content: [{ type: "text", text }], details: text };
 }
 
-/** Readiness never rounds up into a perfect score: 100% is reserved for
- *  every point solid (199/200 is 99%, not 100%). */
-function percent(ratio: number): string {
-	return `${ratio === 1 ? 100 : Math.floor(ratio * 100)}%`;
+/** Readiness from integer counts: never rounds up into a perfect score
+ *  (100% is reserved for every point solid, so 199/200 is 99%), and never
+ *  undercounts an exact integer percentage through float error (57/100 is
+ *  57%, not 56%). */
+function pct(solid: number, total: number): string {
+	if (total === 0) return "0%";
+	return `${solid === total ? 100 : Math.floor((solid * 100) / total)}%`;
 }
 
 function locatePoint(test: TestRecord, pointId: string) {
@@ -160,9 +163,9 @@ function testProgressTool(ctx: TestPrepToolContext): AgentTool<typeof emptyInput
 				{ solid: 0, total: 0 },
 			);
 			const lines = [
-				`Ready: ${percent(ready.overall)} (${totals.solid}/${totals.total} points solid)`,
+				`Ready: ${pct(totals.solid, totals.total)} (${totals.solid}/${totals.total} points solid)`,
 				...ready.sections.map(
-					(section) => `${section.title}: ${percent(section.ratio)} (${section.solid}/${section.total})`,
+					(section) => `${section.title}: ${pct(section.solid, section.total)} (${section.solid}/${section.total})`,
 				),
 			];
 
@@ -265,7 +268,7 @@ function recordResultTool(ctx: TestPrepToolContext): AgentTool<typeof recordResu
 			);
 			return textResult(
 				`Point ${input.pointId} is now ${located?.point.status ?? "unknown"}.\n` +
-					`Overall readiness: ${percent(ready.overall)} (${totals.solid}/${totals.total} points solid).`,
+					`Overall readiness: ${pct(totals.solid, totals.total)} (${totals.solid}/${totals.total} points solid).`,
 			);
 		},
 	};

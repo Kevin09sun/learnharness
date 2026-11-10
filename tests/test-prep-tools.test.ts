@@ -328,6 +328,29 @@ describe("test_progress", () => {
 		assert.match(text, /Big: 99%/);
 	});
 
+	it("reports exact integer percentages without float undercount (57/100, 29/100)", async () => {
+		for (const [solidCount, expected] of [
+			[57, "57%"],
+			[29, "29%"],
+		] as const) {
+			const points = Array.from({ length: 100 }, (_, i) => ({
+				id: `p_${i}`,
+				text: `Point ${i}`,
+				source: "outline",
+				status: i < solidCount ? ("solid" as const) : ("unchecked" as const),
+				history: [],
+			}));
+			const { tests } = fakeTests(
+				recordOf({ sections: [{ id: "sec_big", title: "Big", points }] }),
+			);
+			const result = await testPrepTools(ctxOf(tests)).test_progress!.execute("call_p", {} as never);
+			const text = (result.content[0] as { text: string }).text;
+			assert.match(text, new RegExp(`Ready: ${expected}`));
+			assert.match(text, new RegExp(`Big: ${expected}`));
+			assert.doesNotMatch(text, new RegExp(`Ready: ${Number.parseInt(expected) - 1}%`));
+		}
+	});
+
 	it("caps the queue at 30 lines", async () => {
 		const many: TestRecord = recordOf({
 			sections: [
