@@ -3,6 +3,7 @@ import {
 	createPracticeAgent,
 	createProberAgent,
 	createTeacherAgent,
+	createTestPrepAgent,
 	type AgentBuildOptions,
 	type TeachingAgent,
 } from "../agent/teacher-agent.ts";
@@ -207,6 +208,14 @@ export async function handleChatInput(
 		return Response.json({ error: "Unknown chat" }, { status: 404 });
 	}
 
+	// A test prep session is defined by its linked test record. A corrupt or
+	// hand-edited record with no testId would have the agent tools read an
+	// undefined id and every call fail obscurely downstream — refuse the turn
+	// up front, before any liveness or write effects.
+	if (record.kind === "testprep" && !record.testId) {
+		return Response.json({ error: "This test prep session is not linked to a test." }, { status: 500 });
+	}
+
 	// Refuse an ineligible Retry before catalog refresh, compaction, or any
 	// turn/write effects. Revalidate after the awaited gates below too.
 	if (input.type === "retry") {
@@ -294,7 +303,7 @@ export async function handleChatInput(
 				effective.compaction?.thresholdTokens,
 				catalogContextLimits().get(modelIdForCompaction),
 			),
-			systemPromptTokens: Math.ceil(composeInstructions(record.kind === "practice" ? "practice" : "teacher").length / 4),
+			systemPromptTokens: Math.ceil(composeInstructions(record.kind === "practice" ? "practice" : record.kind === "testprep" ? "testprep" : "teacher").length / 4),
 		},
 		chatId,
 	);
@@ -468,7 +477,17 @@ export async function handleChatInput(
 	// uniform across kinds).
 	const constructed: TeachingAgent = buildAgent
 		? buildAgent({ ...agentOpts, teaching })
-		: record.kind === "practice"
+		: record.kind === "testprep"
+			? createTestPrepAgent(
+					{
+						chatId,
+						// The record guard above refuses a testprep turn without a testId.
+						testId: record.testId!,
+						tests: stores.testStore,
+					},
+					agentOpts,
+				)
+			: record.kind === "practice"
 			? createPracticeAgent(
 					{
 						chatId,
@@ -670,7 +689,7 @@ export async function handleChatInput(
 								fresh.compaction?.thresholdTokens,
 								catalogContextLimits().get(kickModelId),
 							),
-							systemPromptTokens: Math.ceil(composeInstructions(freshRecord.kind === "practice" ? "practice" : "teacher").length / 4),
+							systemPromptTokens: Math.ceil(composeInstructions(freshRecord.kind === "practice" ? "practice" : freshRecord.kind === "testprep" ? "testprep" : "teacher").length / 4),
 						};
 					}, chatId);
 			},

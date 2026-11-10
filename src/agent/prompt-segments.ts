@@ -42,6 +42,13 @@ const PROMPTS_DIR = path.join(PATHS.root, "src", "agent", "prompts");
  *  (practice has no such tools). */
 const PRACTICE_SHARED_FRAGMENTS = ["10-voice.md", "15-accuracy.md", "16-mental-model.md", "40-formatting.md"];
 
+/** Shared fragments the TEST PREP agent composes: voice, accuracy, the
+ *  learner-file mechanics (it reads the outline/slides) and formatting.
+ *  The teaching base, question tools and confidence mechanics stay out —
+ *  test prep has its own no-hints/no-explanation doctrine and no quiz or
+ *  confidence tools (owner design, 2026-11-10). */
+const TESTPREP_SHARED_FRAGMENTS = ["10-voice.md", "15-accuracy.md", "30-learner-files.md", "40-formatting.md"];
+
 /** Absolute path for an override file (unchecked — validate first). */
 function overrideFileFor(segmentPath: string): string {
 	return path.join(PROMPTS_OVERRIDE_DIR, ...segmentPath.split("/"));
@@ -65,13 +72,14 @@ export function readPromptOverride(segmentPath: string): string | null {
  *  method lead; the shared tool/file/format mechanics are an appendix).
  *  The exact order composeInstructions composes them in. */
 export function listSourceSegments(agent: PromptAgent): Array<{ path: string; shared: boolean; file: string }> {
-	// PRACTICE (owner, 2026-10-04): its own directory plus a CURATED
-	// shared appendix — the teaching base and the question/confidence/
-	// file mechanics stay out (the doctrine contradicts them; 00-base.md
-	// plays the base role), but the FORMATTING guide composes for every
-	// agent (owner, 2026-10-04 late): LaTeX delimiters and markdown apply
-	// in all settings — practice shares the $...$/$$...$$ authoring contract.
-	const segments: Array<{ path: string; shared: boolean; file: string }> = agent === "practice" ? [] : [
+	// PRACTICE (owner, 2026-10-04) and TEST PREP (owner, 2026-11-10): their
+	// own directories plus a CURATED shared appendix — the teaching base and
+	// the question/confidence/file mechanics they do not use stay out (the
+	// doctrine contradicts them; 00-base.md plays the base role), but the
+	// FORMATTING guide composes for every agent (owner, 2026-10-04 late):
+	// LaTeX delimiters and markdown apply in all settings — practice shares
+	// the $...$/$$...$$ authoring contract.
+	const segments: Array<{ path: string; shared: boolean; file: string }> = agent === "practice" || agent === "testprep" ? [] : [
 		{ path: "system-prompt.md", shared: true, file: PATHS.teacherPrompt },
 	];
 	const dir = path.join(PROMPTS_DIR, agent);
@@ -83,8 +91,12 @@ export function listSourceSegments(agent: PromptAgent): Array<{ path: string; sh
 	}
 	const sharedDir = path.join(PROMPTS_DIR, "shared");
 	if (fs.existsSync(sharedDir)) {
-		// The practice allowlist (owner, 2026-10-04 late): formatting only.
-		const allow = agent === "practice" ? PRACTICE_SHARED_FRAGMENTS : null;
+		// The per-agent shared allowlist (owner, 2026-10-04 late).
+		const allow = agent === "practice"
+			? PRACTICE_SHARED_FRAGMENTS
+			: agent === "testprep"
+				? TESTPREP_SHARED_FRAGMENTS
+				: null;
 		const sharedFragments = fs
 			.readdirSync(sharedDir)
 			.filter((f) => FRAGMENT_RE.test(f) && (allow === null || allow.includes(f)))
@@ -127,7 +139,7 @@ export function effectivePromptSegments(
 /** Every known segment path across both agents (route validation). */
 export function allSegmentPaths(): string[] {
 	const paths = new Set<string>();
-	for (const agent of ["prober", "teacher", "practice"] as const) {
+	for (const agent of ["prober", "teacher", "practice", "testprep"] as const) {
 		for (const segment of listSourceSegments(agent)) paths.add(segment.path);
 	}
 	return [...paths].sort();

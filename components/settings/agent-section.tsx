@@ -104,7 +104,7 @@ interface SegmentInfo {
 	shared: boolean;
 }
 
-type PromptView = Record<"teacher" | "prober" | "practice", SegmentInfo[]>;
+type PromptView = Record<"teacher" | "prober" | "practice" | "testprep", SegmentInfo[]>;
 type PromptRow = SegmentInfo & { usageHint?: string };
 
 /** Compose: one tool toggled, the rest of the section carried verbatim.
@@ -226,6 +226,7 @@ export function sectionedSegments(view: PromptView): PromptSection[] {
 		{ id: "teacher", label: "Teacher" },
 		{ id: "prober", label: "Prober" },
 		{ id: "practice", label: "Practice" },
+		{ id: "testprep", label: "Test prep" },
 	] as const;
 	const shared = new Map<string, SegmentInfo>();
 	for (const { id } of agents) {
