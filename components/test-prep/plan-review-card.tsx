@@ -4,7 +4,7 @@ import { useContext, useEffect, useState } from "react";
 
 import { ChatActionsContext } from "@/components/chat";
 import { PlanEditor } from "@/components/test-prep/plan-editor";
-import type { ArtifactPartProps, PlanDraftSection, TestRecord } from "@/src/core";
+import type { ArtifactPartProps, LhViewMessage, PlanDraftSection, TestRecord } from "@/src/core";
 
 /**
  * The plan-review card (test prep, 2026-11-10): the `propose_plan` artifact.
@@ -22,7 +22,35 @@ import type { ArtifactPartProps, PlanDraftSection, TestRecord } from "@/src/core
  * learner message through the session's normal send path, which lets the
  * agent move on to the first sitting. A confirmed plan collapses to a
  * summary with a link back to the readiness page.
+ *
+ * Revisions: a later propose_plan supersedes every earlier proposal. Only
+ * the latest propose_plan part may show the editor/Confirm while the plan is
+ * unconfirmed (the record is the single latest saved revision, so an earlier
+ * card showing it would let the learner "confirm" a scope that no longer
+ * matches its own message); earlier parts collapse to one muted line.
  */
+
+/** The latest propose_plan call in the session view, or null when the
+ *  context has no view (tests/previews keep the card interactive). */
+function latestProposePlanCallId(messages: readonly LhViewMessage[] | undefined): string | null {
+	if (!messages) return null;
+	for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex--) {
+		const parts = messages[messageIndex]?.parts ?? [];
+		for (let partIndex = parts.length - 1; partIndex >= 0; partIndex--) {
+			const candidate = parts[partIndex];
+			// Only a SETTLED call saved a revision; a failed/interrupted call
+			// (output-error, input-available) never superseded the record.
+			if (
+				candidate?.type === "tool-propose_plan" &&
+				candidate.state === "output-available" &&
+				typeof candidate.toolCallId === "string"
+			) {
+				return candidate.toolCallId;
+			}
+		}
+	}
+	return null;
+}
 
 function toDraft(sections: TestRecord["sections"]): PlanDraftSection[] {
 	return sections.map((section) => ({
@@ -77,6 +105,9 @@ export function PlanReviewCard({ part }: ArtifactPartProps) {
 		};
 	}, [chatId]);
 
+	const latestProposalId = latestProposePlanCallId(actions?.messages);
+	const isLatestProposal = latestProposalId === null || latestProposalId === part.toolCallId;
+
 	async function save(sections: PlanDraftSection[], confirm: boolean): Promise<void> {
 		if (!testId) return;
 		setSaving(true);
@@ -128,6 +159,14 @@ export function PlanReviewCard({ part }: ArtifactPartProps) {
 		return (
 			<div data-testid="plan-review-card" className="my-1 rounded-xl border bg-card p-4 text-sm text-muted-foreground">
 				{error ?? "The plan is unavailable."}
+			</div>
+		);
+	}
+
+	if (!isLatestProposal) {
+		return (
+			<div data-testid="plan-superseded" className="my-1 px-1 text-sm text-muted-foreground/70">
+				This plan was revised below.
 			</div>
 		);
 	}

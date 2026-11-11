@@ -92,14 +92,16 @@ function list(): Array<Pick<TestRecord, "id" | "title" | "updatedAt" | "planConf
 	}
 }
 
-/** Merge an edited plan draft (ids minted here for new sections/points)
- *  and optionally confirm it. Unconfirmed saves keep the prior flag. */
+/** Merge an edited plan draft (ids minted here for new sections/points) and
+ *  set the confirmation to exactly `confirm`. An unconfirmed save CLEARS a
+ *  prior confirmation: a revision after confirmation is a new proposal the
+ *  learner has not approved, and questions must be refused until they do. */
 function savePlan(id: string, draft: PlanDraftSection[], confirm: boolean): TestRecord {
 	const record = loadOrThrow(id);
 	const next: TestRecord = {
 		...record,
 		sections: mergePlan(record.sections, draft, newId),
-		planConfirmed: confirm ? true : record.planConfirmed,
+		planConfirmed: confirm,
 		updatedAt: new Date().toISOString(),
 	};
 	writeTest(next);

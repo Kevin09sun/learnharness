@@ -6,8 +6,7 @@ import { readSettings, writeSettings } from "../store/settings.ts";
 import { readCustomAuth } from "../store/auth.ts";
 import { customAuthState, customKeyAuthorized, persistCustomAuth } from "./custom-provider-auth.ts";
 import type { CustomAuthBinding } from "../core/custom-provider-auth.ts";
-import { desktopAPIAuthorized } from "./desktop-access.ts";
-import { subscriptionRequestOrigin } from "./web-subscription-http.ts";
+import { sameOriginAuthorized } from "./same-origin.ts";
 import { discoverModels, mergeManualModels, syncCustomProvider } from "./custom-provider.ts";
 import { parseCustomModelOverridesBody } from "./settings-body.ts";
 import { CustomBodyLimitError, readBoundedJson } from "./custom-provider-body.ts";
@@ -47,20 +46,6 @@ export function customProviderGet(request: Request): Response {
 	});
 }
 
-function authorized(request: Request): boolean {
-	const desktop = process.env.LH_DESKTOP_SERVER === "1" || Boolean(process.env.LH_DESKTOP_API_SECRET);
-	if (desktop) return desktopAPIAuthorized(request.headers);
-	const origin = request.headers.get("origin");
-	if (!origin || origin === "null") return false;
-	try {
-		// Next's standalone Request URL can use its internal hostname. Match
-		// the actual addressed Host through the app's existing origin seam;
-		// never trust forwarded-origin headers.
-		return origin === subscriptionRequestOrigin(request)
-			&& (!request.headers.has("sec-fetch-site") || request.headers.get("sec-fetch-site") === "same-origin");
-	} catch { return false; }
-}
-
 /** Auth pair FIRST, matching config nonce SECOND. Any interrupted/failed
  * cross-file publication is durably unusable, including with a real env key.
  * Best-effort rollback restores the entire old pair, never just its secret. */
@@ -82,7 +67,7 @@ function commit(cp: CustomProviderSettings | undefined, binding?: CustomAuthBind
 }
 
 export async function customProviderMutation(request: Request): Promise<Response> {
-	if (!authorized(request)) return failure("Custom configuration requires a trusted same-origin request.", 403);
+	if (!sameOriginAuthorized(request)) return failure("Custom configuration requires a trusted same-origin request.", 403);
 	if (request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") return failure("JSON content-type is required.", 415);
 	try {
 		// Next can represent an empty DELETE as a zero-byte stream rather

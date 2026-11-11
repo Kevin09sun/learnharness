@@ -126,6 +126,10 @@ const EXPAND_DIST = 16;
  */
 export const ChatActionsContext = createContext<{
 	chatId: string;
+	/** The session's current projected view. Artifact cards use it to tell
+	 *  whether their own part is still the latest of its kind (the plan
+	 *  card: a later propose_plan revision supersedes earlier proposals). */
+	messages?: LhViewMessage[];
 	syncFromServer: () => Promise<void>;
 	/** Send a user message into the session (demo error-fix loop, W6). */
 	sendText: (text: string) => void;
@@ -1261,6 +1265,7 @@ export function Chat({
 		<ChatActionsContext.Provider
 			value={{
 				chatId,
+				messages,
 				syncFromServer,
 				sendText: (t: string) => {
 					void send({ type: "text", text: t });

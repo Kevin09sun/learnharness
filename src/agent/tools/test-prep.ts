@@ -126,7 +126,8 @@ function proposePlanTool(ctx: TestPrepToolContext): AgentTool<typeof proposePlan
 			"the individual points the test covers, every point carrying the outline line or slide it came from. " +
 			"Validates that every section has a title and at least one point, and that every point has text. Saves the " +
 			"plan UNCONFIRMED and ends your move: say nothing further that assumes scope, wait for the learner to review " +
-			"and confirm. Call it again whenever the learner asks for changes — including after confirmation.",
+			"and confirm. Call it again whenever the learner asks for changes — including after confirmation; a revision " +
+			"is unconfirmed again, so check_point and record_result refuse until the learner confirms it.",
 		parameters: proposePlanInputObject,
 		prepareArguments: (args: unknown) => healEncodedArguments(args, proposePlanInputObject) as never,
 		executionMode: "sequential",
@@ -137,8 +138,9 @@ function proposePlanTool(ctx: TestPrepToolContext): AgentTool<typeof proposePlan
 			const points = saved.sections.reduce((total, section) => total + section.points.length, 0);
 			return textResult(
 				`Plan proposed with ${saved.sections.length} section(s) and ${points} point(s). ` +
-					"End your turn now and wait for the learner to review it — do not check any point until the plan is confirmed. " +
-					"If the learner asks for changes, call propose_plan again with the revised sections.",
+					"The plan is UNCONFIRMED: end your turn now and wait for the learner to review it — check_point and " +
+					"record_result refuse until the learner confirms. If the learner asks for changes, call propose_plan " +
+					"again with the revised sections; the revision is unconfirmed again.",
 			);
 		},
 	};

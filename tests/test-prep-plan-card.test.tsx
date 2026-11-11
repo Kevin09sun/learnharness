@@ -20,7 +20,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { parseHTML } from "linkedom";
 import { ChatActionsContext } from "../components/chat.tsx";
 import { PlanReviewCard } from "../components/test-prep/plan-review-card.tsx";
-import type { TestRecord } from "../src/core/index.ts";
+import type { LhViewMessage, TestRecord } from "../src/core/index.ts";
 
 const dom = parseHTML("<html><body></body></html>");
 Object.assign(globalThis, {
@@ -36,13 +36,29 @@ const originalFetch = globalThis.fetch;
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
 
-afterEach(async () => {
+async function unmount() {
 	await act(async () => root?.unmount());
 	host?.remove();
 	root = undefined;
 	host = undefined;
+}
+
+afterEach(async () => {
+	await unmount();
 	globalThis.fetch = originalFetch;
 });
+
+/** The view messages a mounted proposal card sees (the chat context). */
+function proposalMessages(
+	toolCallIds: string[],
+	state: string = "output-available",
+): LhViewMessage[] {
+	return toolCallIds.map((toolCallId, index) => ({
+		id: `message_${index + 1}`,
+		role: "assistant",
+		parts: [{ type: "tool-propose_plan", toolCallId, state }],
+	}));
+}
 
 function record(overrides: Partial<TestRecord> = {}): TestRecord {
 	return {
@@ -67,7 +83,12 @@ function record(overrides: Partial<TestRecord> = {}): TestRecord {
 }
 
 /** Mounts the card against a mock API, returning the requests it saw. */
-async function mount(initial: TestRecord) {
+async function mount(
+	initial: TestRecord,
+	options: { toolCallId?: string; messages?: LhViewMessage[] } = {},
+) {
+	const toolCallId = options.toolCallId ?? "call_1";
+	const messages = options.messages ?? proposalMessages([toolCallId]);
 	const puts: Array<{ method: string; body: unknown }> = [];
 	const sent: string[] = [];
 	let current = initial;
@@ -94,6 +115,7 @@ async function mount(initial: TestRecord) {
 			<ChatActionsContext.Provider
 				value={{
 					chatId: "chat_1",
+					messages,
 					syncFromServer: async () => {},
 					sendText: (text: string) => {
 						sent.push(text);
@@ -105,7 +127,7 @@ async function mount(initial: TestRecord) {
 					part={{
 						type: "tool-propose_plan",
 						state: "output-available",
-						toolCallId: "call_1",
+						toolCallId,
 						// Deliberately different from the record: the card must
 						// render the saved plan, never the call arguments.
 						input: {
@@ -169,4 +191,36 @@ test("a confirmed plan collapses to a summary linking to the readiness page", as
 	const link = document.querySelector<HTMLAnchorElement>('a[href="/tests/test_1"]');
 	assert.ok(link, "the summary links to the readiness page");
 	assert.match(document.body.textContent ?? "", /Plan confirmed/);
+});
+
+test("only the latest propose_plan card offers the editor; an earlier proposal collapses", async () => {
+	const messages = proposalMessages(["call_old", "call_new"]);
+
+	await mount(record(), { toolCallId: "call_old", messages });
+	assert.ok(document.querySelector('[data-testid="plan-superseded"]'), "the superseded part collapses");
+	assert.equal(document.querySelector('[data-testid="plan-editor"]'), null, "no stale editor");
+	assert.ok(
+		![...document.querySelectorAll("button")].some((button) => button.textContent?.includes("Confirm plan")),
+		"a superseded proposal offers no Confirm",
+	);
+
+	await unmount();
+
+	await mount(record(), { toolCallId: "call_new", messages });
+	assert.ok(document.querySelector('[data-testid="plan-editor"]'), "the latest part owns the editor");
+	assert.equal(document.querySelector('[data-testid="plan-superseded"]'), null);
+});
+
+test("a failed later proposal does not supersede the saved plan", async () => {
+	// The failed call never saved a revision, so the record still belongs to
+	// the settled call — rendering "revised below" there would hide the only
+	// editable card.
+	const messages: LhViewMessage[] = [
+		...proposalMessages(["call_ok"]),
+		...proposalMessages(["call_failed"], "output-error"),
+	];
+
+	await mount(record(), { toolCallId: "call_ok", messages });
+	assert.ok(document.querySelector('[data-testid="plan-editor"]'), "the settled proposal keeps the editor");
+	assert.equal(document.querySelector('[data-testid="plan-superseded"]'), null);
 });

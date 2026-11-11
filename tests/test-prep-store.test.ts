@@ -96,6 +96,24 @@ describe("test store (test prep, 2026-11-10)", () => {
 		);
 	});
 
+	it("a revision saved unconfirmed clears a prior confirmation", () => {
+		const test = testStore.create("Revision");
+		const confirmed = testStore.savePlan(test.id, draft(), true);
+		assert.equal(confirmed.planConfirmed, true);
+
+		// propose_plan after confirmation saves the revision UNCONFIRMED: the
+		// learner has not approved this scope yet, so questions must refuse.
+		const revised = testStore.savePlan(test.id, draft(), false);
+		assert.equal(revised.planConfirmed, false);
+		assert.equal(testStore.get(test.id)!.planConfirmed, false);
+
+		const pointId = revised.sections[0]!.points[0]!.id;
+		assert.throws(
+			() => testStore.recordResult(test.id, pointId, "correct", "chat_1"),
+			{ message: "plan not confirmed" },
+		);
+	});
+
 	it("recordResult on a missing point throws 'unknown point'", () => {
 		const test = testStore.create("Missing point");
 		testStore.savePlan(test.id, draft(), true);

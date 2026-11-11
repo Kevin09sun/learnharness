@@ -11,35 +11,18 @@
  * record (not the propose_plan call's arguments), so edits made elsewhere
  * always show, and Task 8's readiness view reads the same shape.
  *
- * The trusted same-origin guard mirrors app/api/custom-provider (see
- * src/server/custom-provider-http.ts): this is browser intent, not user
- * authentication. Reads stay unguarded like every other route; the
- * mutation refuses a cross-site or cross-origin caller.
+ * The trusted same-origin guard is the shared server helper
+ * (src/server/same-origin.ts, also used by the custom-provider route): this
+ * is browser intent, not user authentication. Reads stay unguarded like
+ * every other route; the mutation refuses a cross-site or cross-origin
+ * caller.
  */
 
 import { planProblems } from "@/src/core";
 import type { PlanDraftSection } from "@/src/core";
-import { desktopAPIAuthorized, stores, subscriptionRequestOrigin } from "@/src/server";
+import { sameOriginAuthorized, stores } from "@/src/server";
 
 export const dynamic = "force-dynamic";
-
-function authorized(request: Request): boolean {
-	const desktop = process.env.LH_DESKTOP_SERVER === "1" || Boolean(process.env.LH_DESKTOP_API_SECRET);
-	if (desktop) return desktopAPIAuthorized(request.headers);
-	const origin = request.headers.get("origin");
-	if (!origin || origin === "null") return false;
-	try {
-		// Match the addressed origin (never forwarded-origin headers), and
-		// refuse an explicit cross-site fetch. Same idiom as the custom
-		// provider route.
-		return (
-			origin === subscriptionRequestOrigin(request) &&
-			(!request.headers.has("sec-fetch-site") || request.headers.get("sec-fetch-site") === "same-origin")
-		);
-	} catch {
-		return false;
-	}
-}
 
 /** Shape gate before planProblems: malformed JSON must not reach `.trim()`. */
 function readDraft(value: unknown): PlanDraftSection[] | null {
@@ -81,7 +64,7 @@ export async function PUT(
 	request: Request,
 	ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-	if (!authorized(request)) {
+	if (!sameOriginAuthorized(request)) {
 		return Response.json({ error: "Test plan changes require a trusted same-origin request." }, { status: 403 });
 	}
 
