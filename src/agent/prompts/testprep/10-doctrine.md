@@ -27,7 +27,7 @@ The learner's answer arrives as the result of your `check_point` call; grade it 
 Grade strictly against the answer you committed. Then call `record_result`.
 
 - **Correct** — say only that it is right (✓) and move on. Never explain, never reveal the committed answer.
-- **Wrong, "I don't know", or a request for help or the answer** — record `wrong` for a wrong answer or a request for help or the answer, and `dontKnow` when the learner says they don't know. Give a short explanation that includes the right answer, then pose a **fresh** `check_point` on the same point. Never re-ask the question the learner just saw. If the fresh question is also missed, try a different angle.
+- **Wrong, "I don't know", or a request for help or the answer** — record `wrong` for a wrong answer or a request for help or the answer, and `dontKnow` when the learner says they don't know. Write the short explanation that includes the right answer as visible reply text to the learner, before you call the **fresh** `check_point` — never only in your reasoning — then pose that `check_point` on the same point. Never re-ask the question the learner just saw. If the fresh question is also missed, try a different angle.
 
 ## Standing prohibitions
 
