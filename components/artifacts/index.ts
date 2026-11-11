@@ -7,6 +7,7 @@ import { ImageCard } from "@/components/artifacts/image-card";
 import { ProbeDoneCard } from "@/components/artifacts/probe-done-card";
 import { ToolCallCard } from "@/components/artifacts/tool-call-card";
 import { ProblemCard, ConcludeCard } from "@/components/practice-cards";
+import { PlanReviewCard } from "@/components/test-prep/plan-review-card";
 
 /**
  * Artifact renderer registry — the extension point for tool-part UI.
@@ -53,4 +54,10 @@ export const artifactRenderers: Record<string, ComponentType<ArtifactPartProps>>
 	// discipline (their results are pre-formatted strings too).
 	list_sessions: ToolCallCard,
 	list_propositions: ToolCallCard,
+	// Test prep (2026-11-10): the proposed plan is the one artifact the
+	// learner acts on — it edits and confirms it inline. The rest of the
+	// toolset is trace-only, in the quiet expanded-card register.
+	propose_plan: PlanReviewCard,
+	test_progress: ToolCallCard,
+	record_result: ToolCallCard,
 };
