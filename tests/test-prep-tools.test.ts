@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { applyResult } from "../src/core/test-prep.ts";
-import type { PlanDraftSection, TestRecord } from "../src/core/test-prep.ts";
+import type { AnswerResult, PlanDraftSection, PointStatus, TestRecord } from "../src/core/test-prep.ts";
 import { QUESTION_TOOLS, toolQuestionKind } from "../src/core/pending.ts";
 import {
 	checkPointInputObject,
@@ -126,6 +126,20 @@ const CHECK_INPUT = {
 	question: "What are the stages of mitosis, in order?",
 	correctAnswer: "Prophase, metaphase, anaphase, telophase.",
 };
+
+/** The fixture record with p_unchecked carrying exactly one prior attempt. */
+function withLastAttempt(result: AnswerResult, chatId: string, status: PointStatus): TestRecord {
+	return recordOf({
+		sections: RECORD.sections.map((section) => ({
+			...section,
+			points: section.points.map((point) =>
+				point.id === "p_unchecked"
+					? { ...point, status, history: [{ at: "2026-11-10T01:00:00.000Z", chatId, result }] }
+					: point,
+			),
+		})),
+	});
+}
 
 const DRAFT: PlanDraftSection[] = [
 	{
@@ -252,6 +266,48 @@ describe("check_point", () => {
 		const result = await tool.execute("call_q", { ...CHECK_INPUT, correctAnswer: "   " } as never);
 		assert.equal(result.isError, true);
 		assert.match((result.details as { problems: string[] }).problems[0]!, /correctAnswer/i);
+	});
+
+	it("REFUSES a fresh check after a miss this sitting without details — no mutation", async () => {
+		for (const result of ["wrong", "dontKnow"] as const) {
+			const { tests, calls } = fakeTests(withLastAttempt(result, "chat_now", "gap"));
+			const tool = testPrepTools(ctxOf(tests)).check_point!;
+			const refused = await tool.execute("call_q", CHECK_INPUT as never);
+			assert.equal(refused.isError, true);
+			assert.match(
+				(refused.details as { problems: string[] }).problems[0]!,
+				/after a miss, put the short explanation/i,
+			);
+			assert.equal(calls.recordResult.length, 0);
+			assert.equal(calls.savePlan.length, 0);
+		}
+	});
+
+	it("accepts the fresh check when details carries the post-miss explanation", async () => {
+		const { tests } = fakeTests(withLastAttempt("wrong", "chat_now", "gap"));
+		const tool = testPrepTools(ctxOf(tests)).check_point!;
+		const result = await tool.execute("call_q", {
+			...CHECK_INPUT,
+			details: "Mitosis runs prophase → metaphase → anaphase → telophase.",
+		} as never);
+		assert.equal(result.isError, undefined);
+		assert.equal(result.terminate, true);
+	});
+
+	it("does NOT gate a miss from an earlier sitting (another chatId)", async () => {
+		const { tests } = fakeTests(withLastAttempt("wrong", "chat_old", "gap"));
+		const tool = testPrepTools(ctxOf(tests)).check_point!;
+		const result = await tool.execute("call_q", CHECK_INPUT as never);
+		assert.equal(result.isError, undefined);
+		assert.equal(result.terminate, true);
+	});
+
+	it("does NOT gate after a correct answer", async () => {
+		const { tests } = fakeTests(withLastAttempt("correct", "chat_now", "solid"));
+		const tool = testPrepTools(ctxOf(tests)).check_point!;
+		const result = await tool.execute("call_q", CHECK_INPUT as never);
+		assert.equal(result.isError, undefined);
+		assert.equal(result.terminate, true);
 	});
 });
 

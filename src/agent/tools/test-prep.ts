@@ -210,6 +210,16 @@ export const checkPointInputObject = Type.Object({
 			"The committed answer is NEVER shown to the learner: he sees only a ✓ verdict when right, or your " +
 			"explanation when wrong.",
 	}),
+	// OVERRIDE the inherited explain description: `details` is the VISIBLE
+	// channel — after a miss this sitting it carries the explanation.
+	details: Type.Optional(
+		Type.String({
+			description:
+				"Optional extra context shown under the question. REQUIRED after a miss this sitting (the point's last " +
+				"answer in this chat was wrong or dontKnow): the short explanation, including the right answer — one or " +
+				"two sentences. The learner sees it with the fresh question; it is rejected when blank.",
+		}),
+	),
 });
 
 function checkPointTool(ctx: TestPrepToolContext): AgentTool<typeof checkPointInputObject> {
@@ -221,9 +231,12 @@ function checkPointTool(ctx: TestPrepToolContext): AgentTool<typeof checkPointIn
 			"he types a free-text answer. THE COMMITMENT RULE: correctAnswer is the FULL correct answer in your own " +
 			"words, reasoning included, COMMITTED before he ever sees the question. When his answer returns, grade it " +
 			"strictly against the commitment — never revise it after seeing his words. THE COMMITTED ANSWER IS NEVER " +
-			"SHOWN TO THE LEARNER: he sees only a ✓ verdict when right, or your explanation when wrong. pointId must " +
-			"name a point in the confirmed plan (validated at call time). ONE question per turn: call a single " +
-			"check_point, then end your turn — his answer determines the next.",
+			"SHOWN TO THE LEARNER: he sees only a ✓ verdict when right, or your explanation when wrong. AFTER A MISS " +
+			"(the point's last answer in this sitting was wrong or \"I don't know\") the fresh check_point MUST carry " +
+			"the short explanation, including the right answer, in `details` — the learner sees it with the question; " +
+			"the call is rejected without it. pointId must name a point in the confirmed plan (validated at call " +
+			"time). ONE question per turn: call a single check_point, then end your turn — his answer determines the " +
+			"next.",
 		parameters: checkPointInputObject,
 		prepareArguments: (args: unknown) => healEncodedArguments(args, checkPointInputObject) as never,
 		executionMode: "sequential",
@@ -232,6 +245,23 @@ function checkPointTool(ctx: TestPrepToolContext): AgentTool<typeof checkPointIn
 			if (problems.length > 0) return invalidInputResult("check_point", problems);
 			const authoring = explainInputProblems(input);
 			if (authoring.length > 0) return invalidInputResult("check_point", authoring);
+			// THE POST-MISS EXPLANATION (live-testing fix, 2026-11-11): the
+			// learner never sees reasoning, so after a miss in THIS sitting the
+			// fresh question must carry the explanation on its visible `details`
+			// field. Earlier-sitting misses do not gate (a new sitting starts
+			// with a clean explanation).
+			const test = ctx.tests.get(ctx.testId);
+			const located = test ? locatePoint(test, input.pointId) : null;
+			const last = located?.point.history.at(-1);
+			const missedThisSitting =
+				last !== undefined &&
+				last.chatId === ctx.chatId &&
+				(last.result === "wrong" || last.result === "dontKnow");
+			if (missedThisSitting && (input.details ?? "").trim().length === 0) {
+				return invalidInputResult("check_point", [
+					"after a miss, put the short explanation (including the right answer) in `details` — the learner sees it with the fresh question",
+				]);
+			}
 			return questionResult();
 		},
 	};
