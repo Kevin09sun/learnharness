@@ -212,6 +212,23 @@ describe("propose_plan", () => {
 		assert.equal(result.isError, undefined);
 		assert.equal(calls.savePlan.length, 1);
 	});
+
+	it("REFUSES a missing test with a clean invalid-input result instead of throwing", async () => {
+		const missing: TestPrepToolContext["tests"] = {
+			get: () => null,
+			savePlan: () => {
+				throw new Error("Test not found: test_missing");
+			},
+			recordResult: () => {
+				throw new Error("Test not found: test_missing");
+			},
+		};
+		const tool = testPrepTools({ chatId: "chat_now", testId: "test_missing", tests: missing }).propose_plan!;
+
+		const result = await tool.execute("call_plan", { sections: DRAFT } as never);
+		assert.equal(result.isError, true);
+		assert.match((result.details as { problems: string[] }).problems[0]!, /not found/i);
+	});
 });
 
 // ── check_point (Review Focus 1, the recall mechanism) ──────────────────────

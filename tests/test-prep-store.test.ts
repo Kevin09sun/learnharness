@@ -167,6 +167,27 @@ describe("test store (test prep, 2026-11-10)", () => {
 		assert.equal(fs.readFileSync(file, "utf-8"), "{ not json", "the unreadable record is left untouched");
 	});
 
+	it("list skips shape-invalid and non-record files individually; get refuses a shape-invalid record", () => {
+		const testsDir = path.join(TMP_DATA, "tests");
+		fs.mkdirSync(testsDir, { recursive: true });
+		for (const file of fs.readdirSync(testsDir)) fs.rmSync(path.join(testsDir, file), { force: true });
+
+		const valid = testStore.create("Valid");
+		const badShape = path.join(testsDir, "test_bad_shape.json");
+		const badBytes = JSON.stringify({ id: "test_bad_shape", title: 42 });
+		fs.writeFileSync(badShape, badBytes);
+		fs.writeFileSync(path.join(testsDir, "notes.json"), JSON.stringify({ hello: "world" }));
+		fs.writeFileSync(path.join(testsDir, "test_x (1).json"), JSON.stringify({ hello: "world" }));
+
+		assert.deepEqual(
+			testStore.list().map((test) => test.id),
+			[valid.id],
+			"only the valid record is listed — bad shapes and non-test filenames are skipped individually",
+		);
+		assert.equal(testStore.get("test_bad_shape"), null, "a wrong-shaped record reads as absent");
+		assert.equal(fs.readFileSync(badShape, "utf-8"), badBytes, "the wrong-shaped record is left untouched");
+	});
+
 	it("every mutation announces tests-changed after the write", () => {
 		let announces = 0;
 		const off = subscribe((event) => {

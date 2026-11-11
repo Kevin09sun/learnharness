@@ -18,8 +18,11 @@ import { applyResult, mergePlan, readiness } from "../core/test-prep.ts";
 import type { AnswerResult, PlanDraftSection, TestRecord } from "../core/test-prep.ts";
 import { writeFileAtomicSync } from "./atomic-write.ts";
 
+const TEST_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+const POINT_STATUSES: ReadonlySet<string> = new Set(["unchecked", "solid", "gap", "fixed-recheck"]);
+
 function testFile(id: string): string {
-	if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error(`Invalid test id: ${id}`);
+	if (!TEST_ID_PATTERN.test(id)) throw new Error(`Invalid test id: ${id}`);
 	return path.join(PATHS.tests, `${id}.json`);
 }
 
@@ -32,6 +35,43 @@ function writeTest(record: TestRecord): void {
 	writeFileAtomicSync(testFile(record.id), JSON.stringify(record, null, "\t"));
 }
 
+/** The record shape a file must satisfy before the store trusts it. A
+ *  parseable file can still be foreign (a conflict copy, a hand-edited
+ *  notes file), and projecting readiness off it would crash or lie. */
+function isTestRecord(value: unknown): value is TestRecord {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const record = value as Record<string, unknown>;
+	if (
+		typeof record.id !== "string" ||
+		typeof record.title !== "string" ||
+		typeof record.createdAt !== "string" ||
+		typeof record.updatedAt !== "string" ||
+		typeof record.planConfirmed !== "boolean" ||
+		!Array.isArray(record.sections)
+	) {
+		return false;
+	}
+	return record.sections.every((section) => {
+		if (typeof section !== "object" || section === null || Array.isArray(section)) return false;
+		const candidate = section as Record<string, unknown>;
+		if (typeof candidate.id !== "string" || typeof candidate.title !== "string" || !Array.isArray(candidate.points)) {
+			return false;
+		}
+		return candidate.points.every((point) => {
+			if (typeof point !== "object" || point === null || Array.isArray(point)) return false;
+			const item = point as Record<string, unknown>;
+			return (
+				typeof item.id === "string" &&
+				typeof item.text === "string" &&
+				typeof item.source === "string" &&
+				typeof item.status === "string" &&
+				POINT_STATUSES.has(item.status) &&
+				Array.isArray(item.history)
+			);
+		});
+	});
+}
+
 function get(id: string): TestRecord | null {
 	let parsed: unknown;
 	try {
@@ -42,7 +82,9 @@ function get(id: string): TestRecord | null {
 		// parse.
 		return null;
 	}
-	return parsed as TestRecord;
+	// Parseable but wrong-shaped reads the same as absent; the file is never
+	// rewritten here.
+	return isTestRecord(parsed) ? parsed : null;
 }
 
 function loadOrThrow(id: string): TestRecord {
@@ -85,7 +127,9 @@ function list(): Array<
 		return fs
 			.readdirSync(PATHS.tests)
 			.filter((file) => file.endsWith(".json"))
-			.map((file) => get(file.slice(0, -5)))
+			.map((file) => file.slice(0, -5))
+			.filter((id) => TEST_ID_PATTERN.test(id))
+			.map((id) => get(id))
 			.filter((record): record is TestRecord => record !== null)
 			.map((record) => {
 				const ready = readiness(record);

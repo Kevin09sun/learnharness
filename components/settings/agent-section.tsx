@@ -981,8 +981,9 @@ export function AgentSection({
 					<p className="text-xs text-muted-foreground/70">Loading prompt segments…</p>
 				) : (
 					<div className="flex flex-col gap-4">
-						{/* Teacher, Prober, Practice, Shared — shared chunks once,
-						    each agent's own section in prompt-assembly order. */}
+						{/* Teacher, Prober, Practice, Test prep, Shared — shared
+						    chunks once, each agent's own section in
+						    prompt-assembly order. */}
 						{sectionedSegments(prompts).map((section) => (
 							<div key={section.id} data-testid={`prompt-section-${section.id}`}>
 								<p className="mb-1 text-xs uppercase tracking-widest text-muted-foreground/70">

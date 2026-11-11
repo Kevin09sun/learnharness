@@ -210,8 +210,11 @@ export function newUserSteer(text: string, id: string): LhMessage & UserMessage 
  *  TWO AUDIENCES (owner, tool-result diet 2026-10-02): the MODEL sees the
  *  compact learner-only record (compactAnswerForModel — the call's own
  *  arguments already carry the question/options/explanation/commitment;
- *  restating them doubled every answer's tokens), while `details` keeps
- *  the FULL graded QuestionAnswerData for the record and the UI. */
+ *  restating them doubled every answer's tokens). check_point is the one
+ *  exception: its text is preceded by CHECK_POINT_ANSWER_FRAME, because the
+ *  posing placeholder is dropped by persistTurn and the bare JSON would not
+ *  say the result IS the learner's typed answer. `details` keeps the FULL
+ *  graded QuestionAnswerData for the record and the UI. */
 export function newAnswerResult(
 	toolCallId: string,
 	toolName: string,

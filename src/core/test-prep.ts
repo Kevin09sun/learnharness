@@ -188,9 +188,14 @@ export function nextQueue(
 /**
  * Merge an edited plan draft into the confirmed sections.
  *
- * - A draft point whose id matches an existing point keeps that point's
- *   status/fixedIn/history and takes the draft's text/source.
- * - Any other draft point is new: it gets `newId()` and starts `unchecked`.
+ * - An explicit id (section or point) matching an existing record wins.
+ * - A draft section without an id is matched to an existing section by exact
+ *   (trimmed) title.
+ * - A draft point without an id is matched to an existing, not-yet-claimed
+ *   point by exact (trimmed) text — first in its matched section, then
+ *   anywhere in the test — so a revision without ids keeps its progress.
+ * - A matched point keeps its id/status/fixedIn/history and takes the
+ *   draft's text/source; any other draft point is new (`newId()`, unchecked).
  * - Existing points absent from the draft are dropped (and stop counting
  *   toward readiness); matched sections keep their id, new ones get `newId()`.
  */
@@ -203,13 +208,46 @@ export function mergePlan(
 	for (const section of existing) {
 		for (const point of section.points) existingPoints.set(point.id, point);
 	}
-	const existingSectionIds = new Set(existing.map((section) => section.id));
+	const existingSections = new Map(existing.map((section) => [section.id, section]));
+	const existingSectionsByTitle = new Map<string, TestSection>();
+	for (const section of existing) {
+		const title = section.title.trim();
+		if (!existingSectionsByTitle.has(title)) existingSectionsByTitle.set(title, section);
+	}
+	const claimedPoints = new Set<string>();
+	const claimedSections = new Set<string>();
 
 	return draft.map((section) => {
-		const id = section.id !== undefined && existingSectionIds.has(section.id) ? section.id : newId();
+		let matchedSection: TestSection | undefined;
+		if (section.id !== undefined) {
+			const candidate = existingSections.get(section.id);
+			if (candidate && !claimedSections.has(candidate.id)) matchedSection = candidate;
+		} else {
+			const candidate = existingSectionsByTitle.get(section.title.trim());
+			if (candidate && !claimedSections.has(candidate.id)) matchedSection = candidate;
+		}
+		const id = matchedSection ? matchedSection.id : newId();
+		if (matchedSection) claimedSections.add(matchedSection.id);
+
 		const points = section.points.map((draftPoint): TestPoint => {
-			const prior = draftPoint.id === undefined ? undefined : existingPoints.get(draftPoint.id);
+			let prior: TestPoint | undefined;
+			if (draftPoint.id !== undefined) {
+				const candidate = existingPoints.get(draftPoint.id);
+				if (candidate && !claimedPoints.has(candidate.id)) prior = candidate;
+			} else {
+				const text = draftPoint.text.trim();
+				const sameText = (point: TestPoint) =>
+					!claimedPoints.has(point.id) && point.text.trim() === text;
+				prior = matchedSection?.points.find(sameText);
+				if (!prior) {
+					for (const candidate of existing) {
+						prior = candidate.points.find(sameText);
+						if (prior) break;
+					}
+				}
+			}
 			if (prior) {
+				claimedPoints.add(prior.id);
 				return { ...prior, text: draftPoint.text, source: draftPoint.source, history: [...prior.history] };
 			}
 			return {
@@ -239,6 +277,9 @@ export function planProblems(draft: PlanDraftSection[]): string[] {
 		section.points.forEach((point, pointIndex) => {
 			if (point.text.trim() === "") {
 				problems.push(`Section "${label}", point ${pointIndex + 1} needs text.`);
+			}
+			if (point.source.trim() === "") {
+				problems.push(`Section "${label}", point ${pointIndex + 1} needs a source.`);
 			}
 		});
 	});

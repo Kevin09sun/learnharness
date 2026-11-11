@@ -179,15 +179,21 @@ export function ReadinessView({
 					>
 						{editing ? "Close editor" : "Edit plan"}
 					</Button>
-					<Button
-						type="button"
-						size="sm"
-						data-testid="continue-test"
-						disabled={starting}
-						onClick={() => void start()}
-					>
-						{starting ? "Starting…" : "Continue where I left off"}
-					</Button>
+					{test.planConfirmed ? (
+						<Button
+							type="button"
+							size="sm"
+							data-testid="continue-test"
+							disabled={starting}
+							onClick={() => void start()}
+						>
+							{starting ? "Starting…" : "Continue where I left off"}
+						</Button>
+					) : (
+						<p className="self-center text-sm text-muted-foreground">
+							Plan awaiting review — confirm it in the chat.
+						</p>
+					)}
 				</div>
 			</div>
 

@@ -1407,7 +1407,8 @@ export function Chat({
 				    run behind it would lie. */}
 					{kind !== "practice" && <CoverageRing chatId={chatId} refreshKey={coverageTick} />}
 					{/* Practice sessions: no phase arc — a quiet Practice tag
-					    instead of the phase chip. */}
+					    instead of the phase chip. Test prep: no phase arc
+					    either, so the chip is omitted entirely. */}
 					{kind === "practice" ? (
 						<span
 							data-testid="phase-chip"
@@ -1418,7 +1419,7 @@ export function Chat({
 							<DumbbellIcon className="size-3" />
 							Practice
 						</span>
-					) : (
+					) : kind === "testprep" ? null : (
 						<PhaseChip phase={phases.at(-1) ?? "probe"} />
 					)}
 				</TopBar>

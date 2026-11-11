@@ -243,6 +243,82 @@ describe("mergePlan — editing keeps progress", () => {
 		assert.equal(merged[0]!.points[0]!.status, "gap");
 		assert.equal(merged[0]!.points[0]!.fixedIn, "c1");
 	});
+
+	it("a revision without ids keeps progress by matching trimmed titles and texts", () => {
+		const history = [{ at: "2026-11-09T00:00:00.000Z", chatId: "c1", result: "correct" as const }];
+		const existing: TestSection[] = [
+			section("s1", "Section A", [
+				point({ id: "p1", text: "Alpha", source: "old", status: "solid", history }),
+				point({ id: "p2", text: "Beta", source: "old", status: "fixed-recheck", fixedIn: "c1" }),
+			]),
+		];
+		const draft: PlanDraftSection[] = [
+			{
+				title: "  Section A  ",
+				points: [
+					{ text: " Alpha ", source: "new" },
+					{ text: "Beta", source: "new" },
+				],
+			},
+		];
+
+		const merged = mergePlan(existing, draft, () => "gen-1");
+		assert.equal(merged[0]!.id, "s1", "the section is matched by trimmed title");
+		assert.equal(merged[0]!.points[0]!.id, "p1");
+		assert.equal(merged[0]!.points[0]!.status, "solid");
+		assert.deepEqual(merged[0]!.points[0]!.history, history);
+		assert.equal(merged[0]!.points[0]!.source, "new", "the draft's source wins");
+		assert.equal(merged[0]!.points[1]!.id, "p2");
+		assert.equal(merged[0]!.points[1]!.status, "fixed-recheck");
+		assert.equal(merged[0]!.points[1]!.fixedIn, "c1");
+	});
+
+	it("a renamed point starts unchecked", () => {
+		const existing = [section("s1", "Section A", [point({ id: "p1", text: "Alpha", status: "solid" })])];
+		const draft: PlanDraftSection[] = [
+			{ title: "Section A", points: [{ text: "Alpha, revised", source: "src" }] },
+		];
+
+		const merged = mergePlan(existing, draft, () => "gen-1");
+		assert.equal(merged[0]!.points[0]!.id, "gen-1");
+		assert.equal(merged[0]!.points[0]!.status, "unchecked");
+		assert.deepEqual(merged[0]!.points[0]!.history, []);
+	});
+
+	it("never claims one existing point for two draft points", () => {
+		const existing = [section("s1", "Section A", [point({ id: "p1", text: "Same", status: "solid" })])];
+		const draft: PlanDraftSection[] = [
+			{
+				title: "Section A",
+				points: [
+					{ text: "Same", source: "src" },
+					{ text: "Same", source: "src" },
+				],
+			},
+		];
+
+		const merged = mergePlan(existing, draft, () => "gen-1");
+		assert.equal(merged[0]!.points[0]!.id, "p1");
+		assert.equal(merged[0]!.points[0]!.status, "solid");
+		assert.equal(merged[0]!.points[1]!.id, "gen-1");
+		assert.equal(merged[0]!.points[1]!.status, "unchecked");
+	});
+
+	it("an explicit id takes precedence over text matching", () => {
+		const existing = [
+			section("s1", "Section A", [
+				point({ id: "p1", text: "Alpha", status: "solid" }),
+				point({ id: "p2", text: "Beta", status: "gap" }),
+			]),
+		];
+		const draft: PlanDraftSection[] = [
+			{ id: "s1", title: "Section A", points: [{ id: "p2", text: "Alpha", source: "src" }] },
+		];
+
+		const merged = mergePlan(existing, draft, () => "gen-1");
+		assert.equal(merged[0]!.points[0]!.id, "p2");
+		assert.equal(merged[0]!.points[0]!.status, "gap");
+	});
 });
 
 describe("planProblems — the plan must be answerable", () => {
@@ -272,6 +348,13 @@ describe("planProblems — the plan must be answerable", () => {
 	it("rejects a blank point text", () => {
 		assert.notDeepEqual(
 			planProblems([{ title: "Section", points: [{ text: "  ", source: "outline" }] }]),
+			[],
+		);
+	});
+
+	it("rejects a blank point source", () => {
+		assert.notDeepEqual(
+			planProblems([{ title: "Section", points: [{ text: "A point", source: "  " }] }]),
 			[],
 		);
 	});

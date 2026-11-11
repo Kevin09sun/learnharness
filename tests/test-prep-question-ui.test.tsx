@@ -105,6 +105,18 @@ describe("test prep: no answer reveal", () => {
 		assert.ok(!html.includes(checkPointInput.correctAnswer), "the committed answer never reaches the card");
 	});
 
+	it("renders the post-miss explanation from the check_point call input's details", () => {
+		const html = renderToStaticMarkup(<AnsweredCard answer={answeredCheckPoint()} input={checkPointInput} />);
+		assert.match(html, /Short answer\./);
+	});
+
+	it("a recall card with the same input details renders exactly as before", () => {
+		const recall = answeredCheckPoint({ tool: "recall" });
+		const withInput = renderToStaticMarkup(<AnsweredCard answer={recall} input={checkPointInput} />);
+		const withoutInput = renderToStaticMarkup(<AnsweredCard answer={recall} />);
+		assert.equal(withInput, withoutInput, "explain/recall cards ignore input details, unchanged");
+	});
+
 	it("a recall card still reveals its committed answer (unchanged)", () => {
 		const html = renderToStaticMarkup(
 			<AnsweredCard answer={answeredCheckPoint({ tool: "recall", committed: "The committed recall answer." })} />,

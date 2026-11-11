@@ -90,7 +90,12 @@ function pointGateProblems(ctx: TestPrepToolContext, pointId: string): string[] 
 // ─── propose_plan ───────────────────────────────────────────────────────────
 
 const planPointInputObject = Type.Object({
-	id: Type.Optional(Type.String()),
+	id: Type.Optional(
+		Type.String({
+			description:
+				"Optional. Unchanged points keep their progress automatically by matching text (trimmed) — pass ids only when you know them.",
+		}),
+	),
 	text: Type.String({ description: "REQUIRED — one individually testable item." }),
 	source: Type.String({
 		description: "REQUIRED — the outline line or slide this point came from, so the learner can audit coverage.",
@@ -98,7 +103,12 @@ const planPointInputObject = Type.Object({
 });
 
 const planSectionInputObject = Type.Object({
-	id: Type.Optional(Type.String()),
+	id: Type.Optional(
+		Type.String({
+			description:
+				"Optional. An unchanged section is matched by title (trimmed) without an id; pass ids only when you know them.",
+		}),
+	),
 	title: Type.String({ description: "REQUIRED — the section heading." }),
 	points: Type.Array(planPointInputObject, {
 		description: "REQUIRED — the individual items this section covers (at least one).",
@@ -131,6 +141,9 @@ function proposePlanTool(ctx: TestPrepToolContext): AgentTool<typeof proposePlan
 		execute: async (_toolCallId, input) => {
 			const problems = planProblems(input.sections);
 			if (problems.length > 0) return invalidInputResult("propose_plan", problems);
+			// A missing test is an input problem, not a crash: the store's
+			// loadOrThrow would throw out of the tool.
+			if (!ctx.tests.get(ctx.testId)) return invalidInputResult("propose_plan", ["test not found"]);
 			const saved = ctx.tests.savePlan(ctx.testId, input.sections, false);
 			const points = saved.sections.reduce((total, section) => total + section.points.length, 0);
 			return textResult(

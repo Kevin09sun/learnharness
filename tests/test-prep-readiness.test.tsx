@@ -104,11 +104,11 @@ interface SeenRequest {
 }
 
 /** Mounts against a mock API, returning every request and the navigation. */
-async function mount(options: { navigate?: (target: string) => void } = {}) {
+async function mount(options: { navigate?: (target: string) => void; test?: TestRecord } = {}) {
 	const seen: SeenRequest[] = [];
 	const navigated: string[] = [];
 	const navigate = options.navigate ?? ((target: string) => navigated.push(target));
-	let current = record();
+	let current = options.test ?? record();
 	globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
 		const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
 		const method = init?.method ?? "GET";
@@ -145,6 +145,25 @@ test("renders the overall count-based readiness and each section's solid/total",
 	assert.match(text, /Ready: 50%/, "two of four solid is 50%");
 	assert.match(text, /Membranes & transport/);
 	assert.match(text, /2\/4/, "the section bar carries its counts");
+});
+
+test("an unconfirmed plan hides Continue and shows the review cue", async () => {
+	await mount({ test: record({ planConfirmed: false }) });
+
+	assert.equal(
+		!!document.querySelector('[data-testid="continue-test"]'),
+		false,
+		"no Continue before confirmation",
+	);
+	assert.match(document.body.textContent ?? "", /Plan awaiting review — confirm it in the chat\./);
+	assert.ok(document.querySelector('[data-testid="edit-plan"]'), "Edit plan stays available");
+});
+
+test("a confirmed plan still shows Continue", async () => {
+	await mount();
+
+	assert.ok(document.querySelector('[data-testid="continue-test"]'));
+	assert.ok(!(document.body.textContent ?? "").includes("Plan awaiting review"));
 });
 
 test("clicking a section expands its points with status badges", async () => {

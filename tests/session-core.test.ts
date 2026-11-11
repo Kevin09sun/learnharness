@@ -1790,6 +1790,13 @@ describe("newAnswerResult two audiences", () => {
 		assert.equal(msg.details, full, "details (the record and the UI) stays the full answer");
 	});
 
+	it("check_point dismissed: the model-facing text stays the bare compact JSON, no frame", () => {
+		const dismissed = dismissedAnswer("explain", "Why does a stationary aether predict a fringe shift?");
+		const msg = newAnswerResult("call-cp-dismissed", "check_point", dismissed);
+		assert.equal(textOf(msg), JSON.stringify(compactAnswerForModel(dismissed)));
+		assert.ok(!textOf(msg).includes("The learner answered"), "a dismissal is not an answer — no frame");
+	});
+
 	it("explain and recall: the model-facing text is the bare compact JSON, unchanged", () => {
 		for (const tool of ["explain", "recall"] as const) {
 			const full = buildAnswer(explainQD(), { text: "his own words" }, tool);

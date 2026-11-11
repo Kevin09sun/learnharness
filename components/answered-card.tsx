@@ -8,7 +8,7 @@ import { PathText } from "@/components/file-path-chip";
 import { cn } from "@/lib/utils";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import type { QuestionAnswerData } from "@/src/core";
-import { answerForPresentation, parseAskInput, parseQuizInput } from "@/src/core";
+import { answerForPresentation, parseAskInput, parseExplainInput, parseQuizInput } from "@/src/core";
 
 /**
  * Static rendering of an answered question (tool part in `output-available`).
@@ -39,10 +39,17 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 	// snapshot (owner, 2026-10-12): the details line — and, for ask
 	// questions, option descriptions — re-render from the persisted
 	// arguments, so every existing transcript shows them too. The lean
-	// snapshot (what the model sees, compactAnswerForModel) is untouched;
-	// any parse failure or absent input renders exactly the older card.
+	// snapshot (what the model sees) is untouched — for check_point that is
+	// compactAnswerForModel behind the learner's-answer frame. Any parse
+	// failure or absent input renders exactly the older card.
 	const askInput = answer.kind === "ask" ? parseAskInput(input) : undefined;
-	const parsedDetails = askInput?.details ?? (answer.kind === "quiz" ? parseQuizInput(input)?.details : undefined);
+	// check_point carries the post-miss explanation on the call's
+	// explain-shaped `details` — the same visible field the dock shows — so
+	// the answered record keeps it too. Explain/recall cards are unchanged.
+	const checkPointInput = answer.tool === "check_point" ? parseExplainInput(input) : undefined;
+	const parsedDetails =
+		askInput?.details ??
+		(answer.kind === "quiz" ? parseQuizInput(input)?.details : checkPointInput?.details);
 	const descByIndex = new Map((askInput?.options ?? []).map((o, i) => [i + 1, o.description]));
 
 	return (
