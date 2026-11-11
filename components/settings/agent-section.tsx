@@ -221,26 +221,31 @@ export interface PromptSection {
  *  Usage is derived from the API's actual per-agent membership, never a
  *  second copy of the runtime's Practice shared-fragment allowlist.
  *  Pure — exported for tests. */
-export function sectionedSegments(view: PromptView): PromptSection[] {
+export function sectionedSegments(view: Partial<PromptView>): PromptSection[] {
 	const agents = [
 		{ id: "teacher", label: "Teacher" },
 		{ id: "prober", label: "Prober" },
 		{ id: "practice", label: "Practice" },
 		{ id: "testprep", label: "Test prep" },
 	] as const;
+	// Views may be partial (older API responses, test fixtures): an absent
+	// agent key means that section is skipped — never a crash, never an
+	// empty section rendered.
+	const segmentsFor = (id: keyof PromptView): SegmentInfo[] => view[id] ?? [];
 	const shared = new Map<string, SegmentInfo>();
 	for (const { id } of agents) {
-		for (const segment of view[id]) {
+		for (const segment of segmentsFor(id)) {
 			if (segment.shared && !shared.has(segment.path)) shared.set(segment.path, segment);
 		}
 	}
+	const present = agents.filter(({ id }) => view[id] !== undefined);
 	return [
-		...agents.map(({ id, label }) => ({ id, label, segments: view[id].filter((s) => !s.shared) })),
+		...present.map(({ id, label }) => ({ id, label, segments: segmentsFor(id).filter((s) => !s.shared) })),
 		{
 			id: "shared",
 			label: "Shared",
 			segments: [...shared.values()].map((segment) => {
-				const users = agents.filter(({ id }) => view[id].some((s) => s.path === segment.path)).map(({ label }) => label);
+				const users = agents.filter(({ id }) => segmentsFor(id).some((s) => s.path === segment.path)).map(({ label }) => label);
 				const usage = users.length > 1 ? `${users.slice(0, -1).join(", ")} and ${users.at(-1)}` : users[0];
 				return { ...segment, usageHint: `Used by ${usage}` };
 			}),
