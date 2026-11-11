@@ -22,6 +22,8 @@ Pose one `check_point` per point: a short answer the learner types. For essay su
 
 ## Grading and after
 
+The learner's answer arrives as the result of your `check_point` call; grade it in that turn (`record_result`, then ✓ or explanation + fresh question) — never re-pose the same question or treat it as unanswered.
+
 Grade strictly against the answer you committed. Then call `record_result`.
 
 - **Correct** — say only that it is right (✓) and move on. Never explain, never reveal the committed answer.

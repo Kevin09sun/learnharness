@@ -28,7 +28,7 @@ import { newUserMessage, newAnswerResult, newThinkingMessage, needsContinuation,
 import { endsInFailedTurn, newCompactionMarker, newPlanBlockMessage, projectView } from "../src/core/index.ts";
 import { buildProbeHandoffSteer, buildSubagentSteer } from "../src/core/contracts/jobs.ts";
 import { dismissedAnswer } from "../src/core/question-core.ts";
-import { buildAnswer, type QuestionData } from "../src/core/question-core.ts";
+import { buildAnswer, compactAnswerForModel, type QuestionData } from "../src/core/question-core.ts";
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -1765,6 +1765,41 @@ describe("newAnswerResult two audiences", () => {
 		});
 		assert.equal(msg.details, full, "details is the full QuestionAnswerData verbatim");
 		assert.equal((msg.details as { questionText?: string }).questionText, "Which planet is closest to the Sun?");
+	});
+
+	const textOf = (msg: ReturnType<typeof newAnswerResult>) =>
+		(msg.content as { type: "text"; text: string }[])[0]!.text;
+
+	const explainQD = (): QuestionData => ({
+		id: "call-explain",
+		kind: "explain",
+		question: "Why does a stationary aether predict a fringe shift?",
+		mode: "text",
+		options: [],
+		committedAnswer: "Because motion through it changes the round-trip time.",
+		createdAt: "2026-01-01T00:00:00Z",
+	});
+
+	it("check_point: the model-facing text opens with the learner's-answer frame, then the compact JSON", () => {
+		const full = buildAnswer(explainQD(), { text: "Aether motion changes the round trip." }, "check_point");
+		const msg = newAnswerResult("call-cp", "check_point", full);
+		const text = textOf(msg);
+		const frame = "The learner answered the check_point question you posed. This tool result IS the learner's typed answer — grade it now against your committed correctAnswer, then call record_result.";
+		assert.ok(text.startsWith(frame), "the result states that this IS the learner's typed answer");
+		assert.equal(text, `${frame}\n\n${JSON.stringify(compactAnswerForModel(full))}`);
+		assert.equal(msg.details, full, "details (the record and the UI) stays the full answer");
+	});
+
+	it("explain and recall: the model-facing text is the bare compact JSON, unchanged", () => {
+		for (const tool of ["explain", "recall"] as const) {
+			const full = buildAnswer(explainQD(), { text: "his own words" }, tool);
+			const msg = newAnswerResult(`call-${tool}`, tool, full);
+			assert.equal(
+				textOf(msg),
+				JSON.stringify(compactAnswerForModel(full)),
+				`${tool} answers keep their byte-identical model-facing payload`,
+			);
+		}
 	});
 });
 

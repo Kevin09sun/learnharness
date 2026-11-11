@@ -47,6 +47,16 @@ describe("testprep prompt composition", () => {
 		assert.doesNotMatch(prompt, /Every quiz answer carries/);
 	});
 
+	it("tells the agent the learner's answer IS its check_point result, to grade in that turn", () => {
+		const prompt = composeInstructions("testprep");
+		assert.ok(
+			prompt.includes(
+				"The learner's answer arrives as the result of your `check_point` call; grade it in that turn (`record_result`, then ✓ or explanation + fresh question) — never re-pose the same question or treat it as unanswered.",
+			),
+			"missing the check_point answer-arrival doctrine",
+		);
+	});
+
 	it("lists own fragments first, then exactly the four allowlisted shared files", () => {
 		assert.deepEqual(
 			listSourceSegments("testprep").map((segment) => segment.path),

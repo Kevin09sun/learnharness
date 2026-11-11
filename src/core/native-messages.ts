@@ -53,6 +53,15 @@ import { parseQuestionInput } from "./tool-parts.ts";
 export const INTERRUPTED_TEXT =
 	"The question was interrupted — the learner never answered; continue without holding a result for it.";
 
+/** The contract sentence for a test-prep check_point answer (bug-step3,
+ *  2026-11-11). The posing placeholder that says the answer arrives as the
+ *  call's result is dropped by persistTurn, so without this frame the model
+ *  sees only the bare compact JSON and re-poses the question instead of
+ *  grading it. Scoped to check_point: every other answer's payload stays
+ *  byte-identical (spec: no change to Teach or Practice behavior). */
+export const CHECK_POINT_ANSWER_FRAME =
+	"The learner answered the check_point question you posed. This tool result IS the learner's typed answer — grade it now against your committed correctAnswer, then call record_result.";
+
 // ─── The record's message type ───────────────────────────────────────────────
 
 /**
@@ -208,12 +217,17 @@ export function newAnswerResult(
 	toolName: string,
 	answer: unknown,
 ): LhMessage & ToolResultMessage {
+	const compact = JSON.stringify(compactAnswerForModel(answer as QuestionAnswerData));
+	// check_point only (controller ruling, 2026-11-11): state that this result
+	// IS the learner's typed answer. Dismissals are not answers and keep the
+	// bare compact record.
+	const framed = toolName === "check_point" && !(answer as QuestionAnswerData | null)?.dismissed;
 	return {
 		id: newMessageId(),
 		role: "toolResult",
 		toolCallId,
 		toolName,
-		content: [{ type: "text", text: JSON.stringify(compactAnswerForModel(answer as QuestionAnswerData)) }],
+		content: [{ type: "text", text: framed ? `${CHECK_POINT_ANSWER_FRAME}\n\n${compact}` : compact }],
 		// 0.87.1 narrowed ToolResultMessage.details to JsonRepresentation —
 		// our payloads are JSON-safe answer structures, so the cast is honest.
 		details: answer as ToolResultMessage["details"],
