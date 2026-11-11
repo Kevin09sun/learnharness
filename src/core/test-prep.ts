@@ -129,6 +129,17 @@ export function readiness(test: Pick<TestRecord, "sections">): {
 	return { overall: pointsTotal === 0 ? 0 : solidTotal / pointsTotal, sections };
 }
 
+/** The ONE count-based percent rule for every displayed readiness figure
+ *  (the agent's text and the UI's list/readiness views). Never rounds up
+ *  into a perfect score — 100% is reserved for every point solid, so
+ *  199/200 is 99% — and never undercounts an exact integer percentage
+ *  through float error (57/100 is 57%, not 56%, because the multiplication
+ *  happens before the floor). */
+export function readinessPercent(solid: number, total: number): number {
+	if (total === 0) return 0;
+	return solid === total ? 100 : Math.floor((solid * 100) / total);
+}
+
 // ─── question order ─────────────────────────────────────────────────────────
 
 /**

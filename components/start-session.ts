@@ -2,8 +2,12 @@ import { clearOpeningPrompt, OPENING_PROMPT_FAILURE, stashOpeningPrompt } from "
 
 interface SessionCreation {
 	title: string;
-	kind?: "practice";
+	kind?: "practice" | "testprep";
 	graphContext?: { propositions: readonly { id: string; name: string; statement: string }[] };
+	/** A testprep sitting names the test: a new one by title (the start
+	 *  draft) or an existing record by id (Continue on the readiness page). */
+	testTitle?: string;
+	testId?: string;
 }
 
 /** Per source-composer instance. Retain a successful creation if storage

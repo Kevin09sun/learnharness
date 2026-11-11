@@ -52,7 +52,8 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, DumbbellIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, ClipboardListIcon, DumbbellIcon, WaypointsIcon } from "lucide-react";
+import Link from "next/link";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
@@ -226,6 +227,7 @@ export function Chat({
 	initiallyCompacting = false,
 	initialConfigured = false,
 	kind = "teach",
+	testId,
 }: {
 	chatId: string;
 	title: string;
@@ -235,8 +237,10 @@ export function Chat({
 	/** The session kind (practice sessions, owner 2026-10-04): practice
 	 *  renders no phase chip (no probe→teach arc applies) and a Practice
 	 *  tag rides the header instead. Test prep (2026-11-10) renders
-	 *  teach-like until its own view lands. */
+	 *  teach-like and links its header back to the test's readiness page. */
 	kind?: "teach" | "practice" | "testprep";
+	/** The linked test record (testprep only) — the readiness link target. */
+	testId?: string;
 	initialPrompt?: string;
 	/** A teacher turn is running server-side but attached to no client
 	 * (navigated away mid-turn, returned while in flight). */
@@ -1380,6 +1384,19 @@ export function Chat({
 							Plan
 						</button>
 </Hint>
+					)}
+					{/* A testprep session's door back to its test (test prep,
+					    2026-11-10): the session works one sitting; the readiness
+					    page is where progress across sittings lives. */}
+					{kind === "testprep" && testId && (
+						<Link
+							href={`/tests/${testId}`}
+							data-testid="test-readiness-link"
+							className="lh-no-drag flex shrink-0 items-center gap-1.5 rounded-full border border-border/80 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+						>
+							<ClipboardListIcon className="size-3.5 text-primary" aria-hidden />
+							Readiness
+						</Link>
 					)}
 					{/* The extraction ring (owner-locked redesign, 2026-09-24): fills
 					    with uncovered vs the chunk threshold, pulses while a run is in

@@ -20,7 +20,7 @@
 import { Type } from "typebox";
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import { explainInputBase, explainInputProblems } from "../../core/question-core.ts";
-import { nextQueue, planProblems, readiness } from "../../core/test-prep.ts";
+import { nextQueue, planProblems, readiness, readinessPercent } from "../../core/test-prep.ts";
 import type { AnswerResult, PlanDraftSection, TestRecord } from "../../core/test-prep.ts";
 import { invalidInputResult, questionResult } from "../tool-execute.ts";
 import { healEncodedArguments, healToolRecord } from "./heal.ts";
@@ -57,13 +57,10 @@ function textResult(text: string): AgentToolResult<string> {
 	return { content: [{ type: "text", text }], details: text };
 }
 
-/** Readiness from integer counts: never rounds up into a perfect score
- *  (100% is reserved for every point solid, so 199/200 is 99%), and never
- *  undercounts an exact integer percentage through float error (57/100 is
- *  57%, not 56%). */
+/** Readiness from integer counts: the shared count-based rule (100% only
+ *  when every point is solid, exact integer percentages never undercount). */
 function pct(solid: number, total: number): string {
-	if (total === 0) return "0%";
-	return `${solid === total ? 100 : Math.floor((solid * 100) / total)}%`;
+	return `${readinessPercent(solid, total)}%`;
 }
 
 function locatePoint(test: TestRecord, pointId: string) {

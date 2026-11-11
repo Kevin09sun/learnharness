@@ -70,8 +70,16 @@ function create(title: string, folder?: string): TestRecord {
 }
 
 /** Summaries for the test list: readiness is derived at projection time,
- *  never stored. Most recently touched first. */
-function list(): Array<Pick<TestRecord, "id" | "title" | "updatedAt" | "planConfirmed"> & { readiness: number }> {
+ *  never stored. The solid/total counts ride along so the UI can apply the
+ *  one count-based percent rule (a bare ratio cannot be floored safely).
+ *  Most recently touched first. */
+function list(): Array<
+	Pick<TestRecord, "id" | "title" | "updatedAt" | "planConfirmed"> & {
+		readiness: number;
+		solid: number;
+		total: number;
+	}
+> {
 	try {
 		fs.mkdirSync(PATHS.tests, { recursive: true });
 		return fs
@@ -79,13 +87,22 @@ function list(): Array<Pick<TestRecord, "id" | "title" | "updatedAt" | "planConf
 			.filter((file) => file.endsWith(".json"))
 			.map((file) => get(file.slice(0, -5)))
 			.filter((record): record is TestRecord => record !== null)
-			.map((record) => ({
-				id: record.id,
-				title: record.title,
-				updatedAt: record.updatedAt,
-				planConfirmed: record.planConfirmed,
-				readiness: readiness(record).overall,
-			}))
+			.map((record) => {
+				const ready = readiness(record);
+				const counts = ready.sections.reduce(
+					(acc, section) => ({ solid: acc.solid + section.solid, total: acc.total + section.total }),
+					{ solid: 0, total: 0 },
+				);
+				return {
+					id: record.id,
+					title: record.title,
+					updatedAt: record.updatedAt,
+					planConfirmed: record.planConfirmed,
+					readiness: ready.overall,
+					solid: counts.solid,
+					total: counts.total,
+				};
+			})
 			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 	} catch {
 		return [];

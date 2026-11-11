@@ -37,10 +37,14 @@ export function PlanEditor({
 	initial,
 	onSave,
 	saving = false,
+	submitLabel = "Confirm plan",
 }: {
 	initial: PlanDraftSection[];
 	onSave: (sections: PlanDraftSection[], confirm: boolean) => void;
 	saving?: boolean;
+	/** The action's label — "Confirm plan" on a proposal, "Save plan" when
+	 *  the readiness view edits an already-confirmed plan. */
+	submitLabel?: string;
 }) {
 	const [sections, setSections] = useState<PlanDraftSection[]>(() => cloneDraft(initial));
 
@@ -153,7 +157,7 @@ export function PlanEditor({
 					Add section
 				</Button>
 				<Button type="button" size="sm" disabled={saving} onClick={() => onSave(sections, true)}>
-					{saving ? "Saving…" : "Confirm plan"}
+					{saving ? "Saving…" : submitLabel}
 				</Button>
 			</div>
 		</div>

@@ -254,3 +254,43 @@ describe("the practice draft (?mode=practice, 2026-10-04)", () => {
 		assert.deepEqual(body, { title: "orbital mechanics" });
 	});
 });
+
+describe("the test prep draft (?mode=testprep, 2026-11-10)", () => {
+	it("startDraftSession carries the trimmed test name and kind:\"testprep\"", async () => {
+		let body: Record<string, unknown> | null = null;
+		const f = (async (_url: string, init?: RequestInit) => {
+			body = JSON.parse(String(init?.body));
+			return new Response(JSON.stringify({ id: "c12" }), { status: 201 });
+		}) as unknown as typeof fetch;
+		const target = await startDraftSession(
+			"Chapters 4-6 of the outline",
+			f,
+			"testprep",
+			undefined,
+			undefined,
+			undefined,
+			"  Bio midterm ",
+		);
+		assert.equal(target, "/chat/c12");
+		assert.deepEqual(body, {
+			title: "Chapters 4-6 of the outline",
+			kind: "testprep",
+			testTitle: "Bio midterm",
+		});
+	});
+
+	it("refuses to create a testprep sitting without a test name", async () => {
+		const { f, calls } = fakeFetch("c13");
+		assert.equal(await startDraftSession("Chapters 4-6", f, "testprep"), null);
+		assert.equal(calls.length, 0, "nothing is created without the name");
+	});
+
+	it("the shell names the test prep draft and asks for the test name", () => {
+		const html = renderToStaticMarkup(
+			<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} mode="testprep" />,
+		);
+		assert.match(html, /New test prep session/);
+		assert.match(html, /Test name/);
+		assert.ok(html.includes("Attach the folder with your outline or slides"));
+	});
+});

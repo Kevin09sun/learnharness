@@ -13,6 +13,7 @@ import {
 	nextQueue,
 	planProblems,
 	readiness,
+	readinessPercent,
 	type PlanDraftSection,
 	type TestPoint,
 	type TestSection,
@@ -116,6 +117,21 @@ describe("readiness", () => {
 	it("is 0 for an all-empty test", () => {
 		assert.equal(readiness({ sections: [section("s1", "Empty", [])] }).overall, 0);
 		assert.equal(readiness({ sections: [] }).overall, 0);
+	});
+});
+
+describe("readinessPercent — the one count-based percent rule", () => {
+	it("is 0 when there is nothing planned", () => {
+		assert.equal(readinessPercent(0, 0), 0);
+	});
+
+	it("floors a partial score and never undercounts an exact integer", () => {
+		assert.equal(readinessPercent(57, 100), 57);
+		assert.equal(readinessPercent(199, 200), 99);
+	});
+
+	it("is 100 only when every point is solid", () => {
+		assert.equal(readinessPercent(4, 4), 100);
 	});
 });
 

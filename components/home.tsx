@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CornerDownLeftIcon, DumbbellIcon } from "lucide-react";
+import { CornerDownLeftIcon, DumbbellIcon, ClipboardListIcon } from "lucide-react";
 import { GraphView } from "@/components/graph-view";
 import { MinimalHome } from "@/components/minimal-home";
 import { SetupDialog } from "@/components/setup-dialog";
 import { ComposerActions, NodePickerControl } from "@/components/composer-actions";
+import { Input } from "@/components/ui/input";
 import { useModelSetup, selectedModelUnavailable, openModelPicker, ZeroKeysPill } from "@/components/setup-cta";
 import { DictationBar, joinDictation, useDictation } from "@/components/dictation";
 import { useFieldCycle } from "@/components/field-cycle";
@@ -17,6 +18,15 @@ import { PathInput } from "@/components/path-input";
 import { AttachFilesButton } from "@/components/attach-files-button";
 import { SessionStarter } from "@/components/start-session";
 import type { TurnUsage } from "@/src/core";
+
+/** The composer's three session kinds (test prep joined Teach/Practice,
+ *  2026-11-10). */
+const HOME_MODES = ["teach", "practice", "testprep"] as const;
+const HOME_MODE_LABELS: Record<(typeof HOME_MODES)[number], string> = {
+	teach: "Teach",
+	practice: "Practice",
+	testprep: "Test prep",
+};
 
 /**
  * Home — the knowledge graph is the main view, full-bleed edge to edge
@@ -91,8 +101,12 @@ export function Home({
 	 *  practice switch — practice creates a kind:"practice" session and
 	 *  may carry proposition picks from the chain table (the chip above
 	 *  the composer opens the picker; the picks seed the opening prompt).
-	 *  Not enforcing any input format — the picks are a convenience. */
-	const [mode, setMode] = useState<"teach" | "practice">("teach");
+	 *  Not enforcing any input format — the picks are a convenience.
+	 *  TEST PREP (2026-11-10) is the third mode: it names the test and
+	 *  creates it with the session; the folder rides the normal attach
+	 *  picker into the first message. */
+	const [mode, setMode] = useState<"teach" | "practice" | "testprep">("teach");
+	const [testName, setTestName] = useState("");
 	const [practiceProps, setPracticeProps] = useState<{ id: string; name: string; statement: string }[]>([]);
 	const [chainSelectOpen, setChainSelectOpen] = useState(false);
 	// The chain table is CONTROLLED off this id set (the lifted pick).
@@ -113,6 +127,9 @@ export function Home({
 	const begin = async () => {
 		const t = topicRef.current.trim();
 		if (!t || startingRef.current) return;
+		// A testprep session is created WITH its test record: the name is
+		// required before anything is created (the send button is gated too).
+		if (mode === "testprep" && testName.trim() === "") return;
 		// Unconfigured: the send INTERCEPTS into the setup flow (the draft
 		// stays in the textarea; the learner sends it after Save).
 		if (!configured) {
@@ -139,15 +156,16 @@ export function Home({
 		setBusy(true);
 		setStartError(false);
 		try {
-			// The map context (owner, 2026-10-04): picks in EITHER mode ride
-			// the CREATION as graphContext — the server writes a
+			// The map context (owner, 2026-10-04): Teach and Practice picks
+			// ride the CREATION as graphContext — the server writes a
 			// graph-context marker as message[0] (a separate custom message
 			// before the learner's first user message, propositions + the
 			// chains among them); the prompt stays the learner's own words.
 			const target = await starterRef.current.start({
 				title: t,
 				...(mode === "practice" ? { kind: "practice" } : {}),
-				...(practiceProps.length > 0 ? { graphContext: { propositions: practiceProps } } : {}),
+				...(mode === "testprep" ? { kind: "testprep", testTitle: testName.trim() } : {}),
+				...(mode !== "testprep" && practiceProps.length > 0 ? { graphContext: { propositions: practiceProps } } : {}),
 			}, fetch, JSON.stringify(catalog?.slots.strong));
 			router.push(target);
 		} catch {
@@ -242,6 +260,18 @@ export function Home({
 							)
 						)}
 					/>
+					{mode === "testprep" && (
+						<div className="mb-2">
+							<Input
+								data-testid="test-name"
+								aria-label="Test name"
+								placeholder="Test name"
+								value={testName}
+								onChange={(event) => setTestName(event.target.value)}
+								className="bg-card"
+							/>
+						</div>
+					)}
 					{startError && <p role="alert" className="mb-2 text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
 					<form
 						data-attachment-composer=""
@@ -274,7 +304,13 @@ export function Home({
 								void start();
 							}
 						}}
-						placeholder={mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
+						placeholder={
+							mode === "practice"
+								? "What do you want to practice?"
+								: mode === "testprep"
+									? "Attach the folder with your outline or slides"
+									: "What do you want to learn?"
+						}
 						autoFocus
 						className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 					/>
@@ -284,7 +320,7 @@ export function Home({
 					<button
 						type="submit"
 						aria-label="Start session"
-						disabled={(!topic.trim() && !dictation.active) || busy}
+						disabled={(!topic.trim() && !dictation.active) || busy || (mode === "testprep" && !testName.trim())}
 						className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-40"
 					>
 						<CornerDownLeftIcon className="size-5" />
@@ -299,7 +335,7 @@ export function Home({
 						turns={[] as TurnUsage[]}
 						leadingSlot={
 							<div className="flex items-center gap-0.5 rounded-md border border-border/60 bg-background p-0.5" data-testid="home-mode-switch">
-								{(["teach", "practice"] as const).map((m) => (
+								{HOME_MODES.map((m) => (
 									<button
 										key={m}
 										type="button"
@@ -313,7 +349,8 @@ export function Home({
 										}
 									>
 										{m === "practice" ? <DumbbellIcon aria-hidden="true" className="size-3" /> : null}
-										{m === "teach" ? "Teach" : "Practice"}
+										{m === "testprep" ? <ClipboardListIcon aria-hidden="true" className="size-3" /> : null}
+										{HOME_MODE_LABELS[m]}
 									</button>
 								))}
 							</div>

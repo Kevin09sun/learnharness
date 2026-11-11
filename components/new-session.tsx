@@ -12,6 +12,7 @@ import { useModelSetup, selectedModelUnavailable, openModelPicker, ZeroKeysPill 
 import { StatsBar } from "@/components/stats-bar";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { ComposerActions, NodePickerControl } from "@/components/composer-actions";
+import { Input } from "@/components/ui/input";
 import { OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
 import { SessionStarter } from "@/components/start-session";
 import type { ChatSettings, GraphSnapshot } from "@/src/core";
@@ -43,21 +44,29 @@ const DOCK = "mx-auto w-full max-w-[46rem] px-4";
 export async function startDraftSession(
 	text: string,
 	fetchLike: typeof fetch,
-	mode?: "practice",
+	mode?: "practice" | "testprep",
 	picks?: readonly DraftPick[],
 	starter = new SessionStarter(),
 	settingsIdentity?: string,
+	testTitle?: string,
 ): Promise<string | null> {
 	const t = text.trim();
 	if (!t) return null;
+	// A testprep sitting needs the test's name — the test record is created
+	// with this draft (the readiness page's Continue names an existing id
+	// instead, through SessionStarter directly).
+	const name = testTitle?.trim() ?? "";
+	if (mode === "testprep" && name === "") return null;
 	// THE PICKS RIDE THE CREATE (owner round 10): a practice draft seeded
 	// from the pick bar creates its session WITH the graph context — the
 	// same contract as the home screen's practice send (the marker with
 	// [id] name: statement lines, target validation's truth set).
 	return starter.start(
-		mode === "practice"
-			? { title: t, kind: "practice", ...(picks && picks.length > 0 ? { graphContext: { propositions: picks } } : {}) }
-			: { title: t },
+		mode === "testprep"
+			? { title: t, kind: "testprep", testTitle: name }
+			: mode === "practice"
+				? { title: t, kind: "practice", ...(picks && picks.length > 0 ? { graphContext: { propositions: picks } } : {}) }
+				: { title: t },
 		fetchLike,
 		settingsIdentity,
 	);
@@ -76,6 +85,8 @@ export function DraftShell({
 	startError = false,
 	setupCta,
 	mode = "teach",
+	testName = "",
+	onTestNameChange,
 	picks = [],
 	onOpenPicker,
 	onClearPicks,
@@ -88,8 +99,13 @@ export function DraftShell({
 	startError?: boolean;
 	/** The practice draft (owner, 2026-10-04): ?mode=practice — the
 	 *  created session carries kind:"practice" and the copy changes
-	 *  (the practice agent opens; no probing). */
-	mode?: "teach" | "practice";
+	 *  (the practice agent opens; no probing). The testprep draft
+	 *  (2026-11-10) additionally names the test and creates it with the
+	 *  session. */
+	mode?: "teach" | "practice" | "testprep";
+	/** The testprep draft's test name — required before the send is live. */
+	testName?: string;
+	onTestNameChange?: (v: string) => void;
 	/** The first-run CTA (fix wave chunk B): the same "Set up your models"
 	 *  affordance home carries, rendered above the draft shell — passed by
 	 *  NewSession, which owns the configured state and the SetupDialog. */
@@ -123,8 +139,11 @@ export function DraftShell({
 	// A LIVE dictation keeps the composer sendable ("nothing gets lost"
 	// round, owner 2026-10-01): the spoken text is deferred in the run's
 	// buffer — Enter must reach the finish-first send, not be gated out by
-	// an empty textarea. Nothing said → the send no-ops.
-	const canSend = text.trim().length > 0 || dictation.active;
+	// an empty textarea. Nothing said → the send no-ops. A testprep draft
+	// also needs its test name (the route refuses a nameless test).
+	const canSend =
+		(text.trim().length > 0 || dictation.active) &&
+		(mode !== "testprep" || testName.trim().length > 0);
 	/* FINISH DICTATION FIRST (owner, 2026-10-01): stop the run, let the
 	 * last finals land through onChange, THEN call the parent's send —
 	 * which reads its REF mirror, so the post-await timing of React's
@@ -170,11 +189,19 @@ export function DraftShell({
 						<Conversation className="h-full min-w-0 flex-1" initial="instant">
 							<ConversationContent className="min-h-full gap-0 p-0">
 								<ConversationEmptyState
-									title={mode === "practice" ? "New practice session" : "New session"}
+									title={
+										mode === "practice"
+											? "New practice session"
+											: mode === "testprep"
+												? "New test prep session"
+												: "New session"
+									}
 									description={
 										mode === "practice"
 											? "Pick nodes from your knowledge graph, describe what you want to practice, or bring your own problem."
-											: "The teacher will open by probing what you already know."
+											: mode === "testprep"
+												? "Name the test and attach the folder with its outline or slides. The agent will propose a plan for you to review."
+												: "The teacher will open by probing what you already know."
 									}
 								/>
 							</ConversationContent>
@@ -188,6 +215,18 @@ export function DraftShell({
 									)}
 									setup={setupCta}
 								/>
+								{mode === "testprep" && (
+									<div className="pointer-events-auto mb-2">
+										<Input
+											data-testid="test-name"
+											aria-label="Test name"
+											placeholder="Test name"
+											value={testName}
+											onChange={(event) => onTestNameChange?.(event.target.value)}
+											className="bg-card"
+										/>
+									</div>
+								)}
 								{startError && <p role="alert" className="pointer-events-auto mb-2 text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
 								<div data-attachment-composer="" className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-lg">
 									<Composer
@@ -204,7 +243,13 @@ export function DraftShell({
 										// input (owner refinement round, 2026-09-24) — no lesson has
 										// started yet, so the composer must not read like one is in
 										// flight.
-										placeholder={mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
+										placeholder={
+											mode === "practice"
+												? "What do you want to practice?"
+												: mode === "testprep"
+													? "Attach the folder with your outline or slides"
+													: "What do you want to learn?"
+										}
 									/>
 								</div>
 								<StatsBar
@@ -229,9 +274,12 @@ export function DraftShell({
 	);
 }
 
-export function NewSession({ initialConfigured, mode = "teach" }: { initialConfigured: boolean; mode?: "teach" | "practice" }) {
+export function NewSession({ initialConfigured, mode = "teach" }: { initialConfigured: boolean; mode?: "teach" | "practice" | "testprep" }) {
 	const router = useRouter();
 	const [text, setText] = useState("");
+	// The testprep draft's test name: it names the test record created with
+	// the session (the first message stays the learner's own words).
+	const [testName, setTestName] = useState("");
 	/* The draft MIRROR ("nothing gets lost" round, 2026-10-01): the shell's
 	 * finish-first send calls THIS send after the dictation flush — which
 	 * landed via setState and may not have re-rendered yet. The send reads
@@ -283,6 +331,9 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 	const send = useCallback(() => {
 		const draft = textRef.current.trim();
 		if (!draft || startingRef.current) return;
+		// A testprep sitting needs its test name; the composer's send gate
+		// already holds this, so Enter without a name simply no-ops.
+		if (mode === "testprep" && testName.trim() === "") return;
 		if (!configured) {
 			setSetupOpen(true);
 			return;
@@ -305,8 +356,15 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 		startingRef.current = true;
 		setBusy(true);
 		setStartError(false);
-		void startDraftSession(draft, fetch, mode === "practice" ? "practice" : undefined, mode === "practice" ? picksRef.current : undefined,
-			starterRef.current, JSON.stringify(catalog?.slots.strong))
+		void startDraftSession(
+			draft,
+			fetch,
+			mode === "testprep" ? "testprep" : mode === "practice" ? "practice" : undefined,
+			mode === "practice" ? picksRef.current : undefined,
+			starterRef.current,
+			JSON.stringify(catalog?.slots.strong),
+			mode === "testprep" ? testName : undefined,
+		)
 			.then((target) => {
 				if (target) router.push(target);
 				else { startingRef.current = false; setBusy(false); }
@@ -316,7 +374,7 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 				setBusy(false);
 				setStartError(true);
 			});
-	}, [router, configured, zeroKeys, catalog, mode]);
+	}, [router, configured, zeroKeys, catalog, mode, testName]);
 
 	return (
 		<>
@@ -327,6 +385,8 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 				onChange={applyText}
 				onSend={send}
 				mode={mode}
+				testName={testName}
+				onTestNameChange={setTestName}
 				picks={picks}
 				onOpenPicker={openPicker}
 				onClearPicks={() => applyPicks([])}
