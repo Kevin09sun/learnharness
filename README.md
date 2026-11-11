@@ -5,6 +5,7 @@
 - **Light mode**, plus readability fixes for faded text, graph labels and the logo
 - **Running token counter** for each session
 - **Teach from your materials:** the teacher uses the files and folders you point it at
+- **Test prep mode:** plan a test from your outline, skip what you know, and track readiness across sittings
 - **Visual file and folder picker** in the web version
 - **Windows scripts:** setup, autostart and data sync
 
