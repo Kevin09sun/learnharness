@@ -21,13 +21,28 @@
  */
 
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
-import { createProberAgent, createTeacherAgent, type TeachingAgent } from "../src/agent/teacher-agent.ts";
-import type { ProberToolContext } from "../src/agent/tools.ts";
-import { jobStore } from "../src/store/jobs.ts";
-import { chatStore } from "../src/store/chats.ts";
+import fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { after, describe, it } from "node:test";
 import { createFauxCore } from "@earendil-works/pi-ai";
+
+// ── the seam, BEFORE any config-loading import ──────────────────────────────
+// The chat fixture below must land in a throwaway data dir, never the repo's
+// data/ (the chat-birth-stamp discipline: env first, app modules dynamic).
+const TMP_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "lh-api-key-hook-"));
+process.env.LH_DATA_DIR = TMP_DATA;
+
+const { createProberAgent, createTeacherAgent } = await import("../src/agent/teacher-agent.ts");
+import type { TeachingAgent } from "../src/agent/teacher-agent.ts";
+import type { ProberToolContext } from "../src/agent/tools.ts";
+const { jobStore } = await import("../src/store/jobs.ts");
+const { chatStore } = await import("../src/store/chats.ts");
 import type { PiEngine } from "../src/agent/models.ts";
+
+after(() => {
+	fs.rmSync(TMP_DATA, { recursive: true, force: true });
+});
 
 /** A scripted pi engine — the agent builds need an injected engine since
  * BYOK removed the factory pins (owner, 2026-09-22). */

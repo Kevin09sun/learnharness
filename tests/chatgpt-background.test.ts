@@ -5,13 +5,15 @@ import os from "node:os";
 import path from "node:path";
 import { Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import { AssistantMessageEventStream } from "@earendil-works/pi-ai/utils/event-stream";
-import { piModels } from "../src/agent/models.ts";
-import { toLlmMessages } from "../src/core/native-messages.ts";
-import { buildSubagentSteer } from "../src/core/contracts.ts";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lh-chatgpt-background-"));
 process.env.LH_DATA_DIR = path.join(dir, "data");
 process.env.LH_AUTH_FILE = path.join(dir, "scratch-auth.json");
 fs.writeFileSync(process.env.LH_AUTH_FILE, "{}");
+// ── the seam, BEFORE any config-loading import ──────────────────────────────
+// (the chat-birth-stamp discipline: env first, app modules dynamic)
+const { piModels } = await import("../src/agent/models.ts");
+const { toLlmMessages } = await import("../src/core/native-messages.ts");
+const { buildSubagentSteer } = await import("../src/core/contracts.ts");
 const { stores } = await import("../src/server/stores.ts");
 const { beginTurn, endTurn } = await import("../src/server/turn-liveness.ts");
 const { deliverJobResult, registerLiveAgent, unregisterLiveAgent, setTurnRunner, settleSteers, steerLiveChat } = await import("../src/server/jobs.ts");

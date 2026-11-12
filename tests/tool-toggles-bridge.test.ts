@@ -11,17 +11,33 @@
  * question-tools.test.ts.
  */
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { z } from "zod";
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
 import { Type } from "typebox";
-import { questionResult } from "../src/agent/tool-execute.ts";
-import { createProberAgent, createTeacherAgent } from "../src/agent/teacher-agent.ts";
-import type { ProberToolContext } from "../src/agent/tools.ts";
-import { jobStore } from "../src/store/jobs.ts";
-import { parseAgentSettingsBody } from "../src/server/settings-body.ts";
-import { chatStore } from "../src/store/chats.ts";
 import { createFauxCore } from "@earendil-works/pi-ai";
+
+// ── the seam, BEFORE any config-loading import ──────────────────────────────
+// The prober fixture creates a chat; keep it in a throwaway data dir, never
+// the repo's data/ (the chat-birth-stamp discipline: env first, modules
+// dynamic). The parser tests stay pure — they never touch the dir.
+const TMP_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "lh-tool-toggles-"));
+process.env.LH_DATA_DIR = TMP_DATA;
+
+const { questionResult } = await import("../src/agent/tool-execute.ts");
+const { createProberAgent, createTeacherAgent } = await import("../src/agent/teacher-agent.ts");
+import type { ProberToolContext } from "../src/agent/tools.ts";
+const { jobStore } = await import("../src/store/jobs.ts");
+const { parseAgentSettingsBody } = await import("../src/server/settings-body.ts");
+const { chatStore } = await import("../src/store/chats.ts");
 import type { PiEngine } from "../src/agent/models.ts";
+import type { AgentSettings } from "../src/core/settings.ts";
+
+after(() => {
+	fs.rmSync(TMP_DATA, { recursive: true, force: true });
+});
 
 /** A scripted pi engine — the agent builds need an injected engine since
  *  BYOK removed the factory pins (owner, 2026-09-22). */
@@ -29,7 +45,6 @@ function fauxEngine(): PiEngine {
 	const faux = createFauxCore({});
 	return { model: faux.getModel(), streamFn: faux.streamSimple };
 }
-import type { AgentSettings } from "../src/core/settings.ts";
 
 describe("AgentBuildOptions.toolToggles (the P2 bridge)", () => {
 	const toolNames = (agent: { state: { tools: Array<{ name: string }> } }) =>
