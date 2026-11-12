@@ -83,7 +83,7 @@ describe("nativePathPickerResponse — requests and outcomes", () => {
 describe("pickNativePaths — the Windows dialog", () => {
 	const win32 = { platform: "win32" as const };
 
-	it("runs an STA PowerShell, with the mode's dialog", async () => {
+	it("runs an STA PowerShell with the modern Explorer common item dialog, never the legacy classes", async () => {
 		const calls: { file: string; args: string[] }[] = [];
 		const run = async (file: string, args: string[]) => { calls.push({ file, args }); return "[]"; };
 		await pickNativePaths("folder", { ...win32, run });
@@ -91,9 +91,68 @@ describe("pickNativePaths — the Windows dialog", () => {
 		assert.equal(calls[0]!.file, "powershell.exe");
 		assert.ok(calls[0]!.args.includes("-STA"));
 		const script = (call: { args: string[] }) => Buffer.from(call.args[call.args.indexOf("-EncodedCommand") + 1]!, "base64").toString("utf16le");
-		assert.match(script(calls[0]!), /FolderBrowserDialog/);
-		assert.match(script(calls[1]!), /OpenFileDialog/);
-		assert.match(script(calls[1]!), /Multiselect = \$true/);
+		for (const mode of [0, 1]) {
+			const decoded = script(calls[mode]!);
+			assert.match(decoded, /DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7/i, "IFileOpenDialog coclass");
+			assert.match(decoded, /d57c7288-d4ad-4768-be02-9d969532d960/i, "IFileOpenDialog IID");
+			assert.match(decoded, /IFileOpenDialog/, "the COM interface is declared");
+			assert.match(decoded, /SIGDN_FILESYSPATH/, "paths come back as filesystem paths");
+			assert.doesNotMatch(decoded, /FolderBrowserDialog/);
+			assert.doesNotMatch(decoded, /OpenFileDialog/);
+		}
+	});
+
+	it("folder mode picks one folder; files mode selects multiple existing files", async () => {
+		const scripts: Record<string, string> = {};
+		for (const mode of ["folder", "files"] as const) {
+			await pickNativePaths(mode, {
+				...win32,
+				run: async (_file, args) => {
+					scripts[mode] = Buffer.from(args[args.indexOf("-EncodedCommand") + 1]!, "base64").toString("utf16le");
+					return "[]";
+				},
+			});
+		}
+		assert.match(scripts.folder!, /FOS_PICKFOLDERS/, "folder mode asks for folders");
+		assert.doesNotMatch(scripts.folder!, /FOS_ALLOWMULTISELECT/);
+		assert.match(scripts.folder!, /Pick\(\$owner\.Handle, \$true, 'Choose a folder for LearnHarness'\)/);
+		assert.match(scripts.files!, /FOS_ALLOWMULTISELECT/, "files mode allows multiple");
+		assert.match(scripts.files!, /FOS_FILEMUSTEXIST/);
+		assert.doesNotMatch(scripts.files!, /FOS_PICKFOLDERS/);
+		assert.match(scripts.files!, /Pick\(\$owner\.Handle, \$false, 'Choose files for LearnHarness'\)/);
+		for (const decoded of Object.values(scripts)) {
+			assert.match(decoded, /FOS_FORCEFILESYSTEM/);
+			assert.match(decoded, /FOS_PATHMUSTEXIST/);
+			assert.match(decoded, /FOS_NOCHANGEDIR/);
+			assert.match(decoded, /\[System\.Windows\.Forms\.Application\]::EnableVisualStyles\(\)/, "visual styles before the form");
+		}
+	});
+
+	it("shows an invisible, centered, topmost owner before the dialog and closes it afterwards", async () => {
+		for (const mode of ["folder", "files"] as const) {
+			let script = "";
+			await pickNativePaths(mode, {
+				...win32,
+				run: async (_file, args) => {
+					script = Buffer.from(args[args.indexOf("-EncodedCommand") + 1]!, "base64").toString("utf16le");
+					return "[]";
+				},
+			});
+			assert.match(script, /\$owner\.TopMost = \$true/, `${mode}: owner is topmost`);
+			assert.match(script, /\$owner\.ShowInTaskbar = \$false/, `${mode}: owner stays off the taskbar`);
+			assert.match(script, /\$owner\.FormBorderStyle = 'None'/, `${mode}: owner has no frame`);
+			assert.match(script, /\$owner\.Opacity = 0/, `${mode}: owner is invisible`);
+			assert.match(script, /\$owner\.StartPosition = 'CenterScreen'/, `${mode}: owner is centered`);
+			const show = script.indexOf("$owner.Show()");
+			const activate = script.indexOf("$owner.Activate()");
+			const showDialog = script.indexOf("[LearnHarnessFileDialog]::Pick(");
+			assert.ok(show >= 0 && activate >= 0 && showDialog >= 0, `${mode}: all three calls exist`);
+			assert.ok(show < showDialog, `${mode}: owner is shown before the dialog`);
+			assert.ok(activate < showDialog, `${mode}: owner is activated before the dialog`);
+			assert.match(script, /\$owner\.Handle/, `${mode}: the owner handle is passed to the dialog`);
+			assert.match(script, /\$owner\.Close\(\)/, `${mode}: owner is closed`);
+			assert.match(script, /try\s*\{[\s\S]*Pick\([\s\S]*\}\s*finally\s*\{[\s\S]*\$owner\.Close\(\)/, `${mode}: owner closes even if the dialog throws`);
+		}
 	});
 
 	it("returns chosen paths, including non-ASCII names", async () => {

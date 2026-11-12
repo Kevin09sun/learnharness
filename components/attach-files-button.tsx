@@ -8,6 +8,11 @@ import { Hint } from "@/components/ui/hint";
 import { INSERT_FILE_PATHS_EVENT } from "@/components/path-input";
 
 const PICKER_UNAVAILABLE_NOTICE = "The file picker is not available on this system. You can paste a full path instead.";
+const PICKER_BUSY_NOTICE = "A file picker is already open. It may be behind this window.";
+
+/** Distinguishes a 409 from other failures, so the notice can explain where
+ *  the picker went. */
+class FilePickerBusy extends Error {}
 
 /** The browser case: a browser File has no local path, so the server (on this
  *  same machine) shows the native dialog. null = this OS has no dialog. */
@@ -18,6 +23,7 @@ async function requestNativePaths(mode: "files" | "folder"): Promise<string[] | 
 		body: JSON.stringify({ mode }),
 	});
 	if (response.status === 501) return null;
+	if (response.status === 409) throw new FilePickerBusy();
 	if (!response.ok) throw new Error("File picker request failed.");
 	return ((await response.json()) as { paths: string[] }).paths;
 }
@@ -122,7 +128,7 @@ export function AttachFilesButton({ editorRef }: { editorRef: React.RefObject<HT
 			const paths = mode === "folder" ? chosen.map(directoryReferencePath) : chosen;
 			// Cancelling is an empty list and leaves the draft intact.
 			if (paths.length > 0 && editor?.isConnected && editor === editorRef.current) editor.dispatchEvent(new CustomEvent(INSERT_FILE_PATHS_EVENT, { detail: paths }));
-		} catch { setNotice("Could not open the file picker. Try again."); }
+		} catch (error) { setNotice(error instanceof FilePickerBusy ? PICKER_BUSY_NOTICE : "Could not open the file picker. Try again."); }
 		finally { choosing.current = false; }
 	};
 	const chooseFolder = async () => {

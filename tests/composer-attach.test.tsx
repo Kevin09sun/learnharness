@@ -322,6 +322,16 @@ describe("composer attach button", () => {
 			assert.equal(f.value, "readthis");
 		});
 
+		it("a 409 says the picker may be behind this window", async () => {
+			const f = await fixture({ desktop: false });
+			stubPicker(() => Response.json({ error: "A file picker is already open." }, { status: 409 }));
+			await act(async () => { f.button.click(); });
+			await f.choice("Files");
+			assert.equal(f.doc.querySelector('[data-testid="attachment-popup"]')!.textContent,
+				"A file picker is already open. It may be behind this window.");
+			assert.equal(f.value, "readthis");
+		});
+
 		it("a failed request says so", async () => {
 			const f = await fixture({ desktop: false });
 			stubPicker(() => { throw new Error("offline"); });
