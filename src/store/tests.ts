@@ -14,7 +14,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { PATHS } from "../../config.ts";
 import { emit } from "../core/events.ts";
-import { applyResult, mergePlan, readiness } from "../core/test-prep.ts";
+import { applyResult, forgetChatInPoint, mergePlan, readiness } from "../core/test-prep.ts";
 import type { AnswerResult, PlanDraftSection, TestRecord } from "../core/test-prep.ts";
 import { writeFileAtomicSync } from "./atomic-write.ts";
 
@@ -195,10 +195,35 @@ function recordResult(id: string, pointId: string, result: AnswerResult, chatId:
 	return next;
 }
 
+/** Erase one chat's answers from every point and replay what remains. Writes
+ *  only when some point actually carried an attempt from the chat. A missing
+ *  test returns false. */
+function forgetChat(id: string, chatId: string): boolean {
+	const record = get(id);
+	if (!record) return false;
+
+	let changed = false;
+	const sections = record.sections.map((section) => ({
+		...section,
+		points: section.points.map((point) => {
+			const next = forgetChatInPoint(point, chatId);
+			if (next !== point) changed = true;
+			return next;
+		}),
+	}));
+	if (!changed) return false;
+
+	const next: TestRecord = { ...record, sections, updatedAt: new Date().toISOString() };
+	writeTest(next);
+	emit("tests-changed", {});
+	return true;
+}
+
 export const testStore = {
 	create,
 	get,
 	list,
 	savePlan,
 	recordResult,
+	forgetChat,
 };

@@ -108,6 +108,24 @@ export function applyResult(
 	return { ...point, status, fixedIn, history };
 }
 
+/**
+ * Rebuild a point as if a chat never happened: drop that chat's attempts and
+ * fold the rest through applyResult in their original order. Status is a
+ * state-machine result, not derived from history, so replaying from a clean
+ * slate is the only honest way to recompute it. Returns the same object when
+ * the chat left no attempt.
+ */
+export function forgetChatInPoint(point: TestPoint, chatId: string): TestPoint {
+	if (!point.history.some((attempt) => attempt.chatId === chatId)) return point;
+
+	const remaining = point.history.filter((attempt) => attempt.chatId !== chatId);
+	let rebuilt: TestPoint = { ...point, status: "unchecked", fixedIn: undefined, history: [] };
+	for (const attempt of remaining) {
+		rebuilt = applyResult(rebuilt, attempt.result, attempt.chatId, attempt.at);
+	}
+	return rebuilt;
+}
+
 // ─── readiness ──────────────────────────────────────────────────────────────
 
 /** Readiness = solid points ÷ all points, overall and per section. */

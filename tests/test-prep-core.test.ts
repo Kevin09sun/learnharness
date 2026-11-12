@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
 	applyResult,
+	forgetChatInPoint,
 	mergePlan,
 	nextQueue,
 	planProblems,
@@ -90,6 +91,55 @@ describe("applyResult — the status machine", () => {
 		assert.equal(before.fixedIn, undefined);
 		assert.equal(before.history.length, 0);
 		assert.notEqual(next, before);
+	});
+});
+
+describe("forgetChatInPoint — replay without a deleted chat", () => {
+	const at = "2026-11-10T10:00:00.000Z";
+
+	it("resets a point whose only attempts were from the chat", () => {
+		const before = point({
+			status: "gap",
+			history: [{ at, chatId: "A", result: "wrong" }],
+		});
+
+		const next = forgetChatInPoint(before, "A");
+		assert.equal(next.status, "unchecked");
+		assert.equal(next.fixedIn, undefined);
+		assert.equal(next.history.length, 0);
+	});
+
+	it("replays remaining attempts", () => {
+		let before = point();
+		before = applyResult(before, "wrong", "B", at);
+		before = applyResult(before, "correct", "A", at);
+		before = applyResult(before, "correct", "C", at);
+		assert.equal(before.status, "solid");
+
+		const next = forgetChatInPoint(before, "A");
+		assert.equal(next.status, "fixed-recheck");
+		assert.equal(next.fixedIn, "C");
+		assert.deepEqual(
+			next.history.map((entry) => entry.chatId),
+			["B", "C"],
+		);
+	});
+
+	it("drops solid that depended on the chat", () => {
+		let before = point();
+		before = applyResult(before, "wrong", "B", at);
+		before = applyResult(before, "correct", "C", at);
+		before = applyResult(before, "correct", "A", at);
+		assert.equal(before.status, "solid");
+
+		const next = forgetChatInPoint(before, "A");
+		assert.equal(next.status, "fixed-recheck");
+		assert.equal(next.fixedIn, "C");
+	});
+
+	it("returns the same object when the chat is absent", () => {
+		const before = point({ status: "gap", history: [{ at, chatId: "A", result: "wrong" }] });
+		assert.strictEqual(forgetChatInPoint(before, "Z"), before);
 	});
 });
 

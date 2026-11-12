@@ -20,6 +20,7 @@ const TMP_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "lh-test-prep-store-"));
 process.env.LH_DATA_DIR = TMP_DATA;
 
 const { testStore } = await import("../src/store/tests.ts");
+const { readiness } = await import("../src/core/test-prep.ts");
 const { subscribe } = await import("../src/core/events.ts");
 
 type PlanDraftSection = import("../src/core/test-prep.ts").PlanDraftSection;
@@ -186,6 +187,35 @@ describe("test store (test prep, 2026-11-10)", () => {
 		);
 		assert.equal(testStore.get("test_bad_shape"), null, "a wrong-shaped record reads as absent");
 		assert.equal(fs.readFileSync(badShape, "utf-8"), badBytes, "the wrong-shaped record is left untouched");
+	});
+
+	it("forgetChat erases a chat's results and lowers readiness", () => {
+		const test = testStore.create("Forget chat");
+		const saved = testStore.savePlan(
+			test.id,
+			[{ title: "Section A", points: [{ text: "Point one", source: "notes.md" }] }],
+			true,
+		);
+		const pointId = saved.sections[0]!.points[0]!.id;
+
+		// unchecked + correct → solid, so chat_A is the chat that earned the solid.
+		const solid = testStore.recordResult(test.id, pointId, "correct", "chat_A");
+		assert.equal(solid.sections[0]!.points[0]!.status, "solid");
+		assert.equal(readiness(testStore.get(test.id)!).overall, 1);
+
+		// A chat with no attempt changes nothing and does not write.
+		assert.equal(testStore.forgetChat(test.id, "chat_nope"), false);
+		assert.equal(readiness(testStore.get(test.id)!).overall, 1);
+
+		// Forgetting the chat that earned the solid erases its result.
+		assert.equal(testStore.forgetChat(test.id, "chat_A"), true);
+		const after = testStore.get(test.id)!;
+		assert.notEqual(after.sections[0]!.points[0]!.status, "solid");
+		assert.equal(after.sections[0]!.points[0]!.history.length, 0);
+		assert.equal(readiness(after).overall, 0);
+
+		// A missing test returns false.
+		assert.equal(testStore.forgetChat("test_never_existed", "chat_A"), false);
 	});
 
 	it("every mutation announces tests-changed after the write", () => {
