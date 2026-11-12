@@ -35,10 +35,16 @@ function New-HiddenAction($script) {
 }
 
 $serverSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -Priority 5
+# Restart-on-failure only covers a failed launch, not a running server that gets killed later.
+# The 5-minute trigger brings it back: while the server runs, IgnoreNew makes each firing a no-op.
+$serverTriggers = @(
+	(New-ScheduledTaskTrigger -AtLogOn -User $me),
+	(New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5))
+)
 Register-ScheduledTask -TaskName 'LearnHarness' -Force -Principal $principal -Settings $serverSettings `
 	-Action (New-HiddenAction 'start-server.cmd') `
-	-Trigger (New-ScheduledTaskTrigger -AtLogOn -User $me) `
-	-Description 'Starts the LearnHarness server at logon (127.0.0.1:3000).' | Out-Null
+	-Trigger $serverTriggers `
+	-Description 'Starts the LearnHarness server at logon (127.0.0.1:3000) and restarts it within 5 minutes if it stops.' | Out-Null
 
 $syncSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 4)
 Register-ScheduledTask -TaskName 'LearnHarness Data Sync' -Force -Principal $principal -Settings $syncSettings `
