@@ -193,10 +193,15 @@ describe("AgentSection (thin SSR)", () => {
 		assert.ok(row.includes('aria-checked="false"'), "stored-off renders off");
 	});
 
-	it("renders the owner's FINAL tool list — research, demo, visual, pdf", () => {
-		assert.deepEqual([...TOGGLE_TOOLS], ["research", "demo", "visual", "pdf"]);
+	it("renders the owner's FINAL tool list — research, demo, visual, pdf, web", () => {
+		assert.deepEqual([...TOGGLE_TOOLS], ["research", "demo", "visual", "pdf", "web"]);
 		const html = renderToStaticMarkup(<AgentSection agent={undefined} models={undefined} graph={undefined} onSectionChange={() => {}} onModelsChange={() => {}} />);
 		for (const id of TOGGLE_TOOLS) assert.ok(html.includes(`data-testid="tool-row-${id}"`), id);
+		// The web row reads as its user-facing name, not the bare key, and
+		// defaults on like every other tool (absent key = enabled).
+		assert.ok(html.includes('data-testid="tool-row-web"'), "the web row renders");
+		assert.ok(html.includes("Tool · web search"), "the web row's label is spelled out");
+		assert.ok(tagOf(html, "toggle-tool-web").includes('aria-checked="true"'), "web defaults on with no saved settings");
 	});
 
 	it("tools default ON (absent key = enabled)", () => {
