@@ -86,6 +86,29 @@ function listJobs(chatId: string): JobRecord[] {
 	}
 }
 
+/** Every job record in ONE directory read, grouped by chatId. Each group is
+ *  newest activity first, exactly as listJobs orders a single chat — the
+ *  sessions list uses this so a listing is O(jobs), not O(chats × jobs)
+ *  file reads. Chats with no jobs are simply absent from the map. */
+function listJobsByChat(): Map<string, JobRecord[]> {
+	const grouped = new Map<string, JobRecord[]>();
+	try {
+		fs.mkdirSync(JOBS_DIR, { recursive: true });
+		for (const f of fs.readdirSync(JOBS_DIR)) {
+			if (!f.endsWith(".json")) continue;
+			const job = getJob(f.slice(0, -5));
+			if (!job) continue;
+			const jobs = grouped.get(job.chatId);
+			if (jobs) jobs.push(job);
+			else grouped.set(job.chatId, [job]);
+		}
+	} catch {
+		return grouped;
+	}
+	for (const jobs of grouped.values()) jobs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+	return grouped;
+}
+
 /** The job fulfilling a given tool part, if any (spawn-hook dedup). */
 function findJobByToolCallId(chatId: string, toolCallId: string): JobRecord | null {
 	return listJobs(chatId).find((j) => j.toolCallId === toolCallId) ?? null;
@@ -117,6 +140,7 @@ export const jobStore: JobStore = {
 	getJob,
 	updateJob,
 	listJobs,
+	listJobsByChat,
 	findJobByToolCallId,
 	deleteJobsForChat,
 };

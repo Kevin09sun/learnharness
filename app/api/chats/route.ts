@@ -11,11 +11,14 @@ import type { ChatListItem } from "@/src/core";
  *  (a running spinner per row would double-signal them), so busy means
  *  exactly "a teach turn is in flight". */
 export async function GET() {
+	// ONE jobs-dir read for the whole list (not one per chat): the tokens
+	// join needs every chat's jobs, and listJobs re-reads every file each call.
+	const jobsByChat = stores.jobStore.listJobsByChat();
 	const chats: ChatListItem[] = listChats().map((c) => ({
 		...c,
 		busy: isTurnRunning(c.id),
 		compacting: compactionInFlight(c.id),
-		tokens: chatTokens(c.id) ?? undefined,
+		tokens: chatTokens(c.id, jobsByChat.get(c.id) ?? []) ?? undefined,
 	}));
 	return Response.json({ chats });
 }

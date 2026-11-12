@@ -208,6 +208,15 @@ function fakeJobStore(): JobStore {
 			return Object.assign(job, patch);
 		},
 		listJobs: () => [...jobs.values()],
+		listJobsByChat: () => {
+			const grouped = new Map<string, JobRecord[]>();
+			for (const job of jobs.values()) {
+				const list = grouped.get(job.chatId);
+				if (list) list.push(job);
+				else grouped.set(job.chatId, [job]);
+			}
+			return grouped;
+		},
 		findJobByToolCallId: () => null,
 		deleteJobsForChat: () => 0, // the drop tests never delete
 	};

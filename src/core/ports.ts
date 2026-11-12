@@ -163,6 +163,10 @@ export interface JobStore {
 	updateJob(id: string, patch: JobPatch): JobRecord | null;
 	/** All jobs for a chat, newest activity first. */
 	listJobs(chatId: string): JobRecord[];
+	/** Every job record in one read, grouped by chatId (each group newest
+	 *  activity first, same order as listJobs). For callers that need many
+	 *  chats at once — the sessions list — so the jobs dir is read once. */
+	listJobsByChat(): Map<string, JobRecord[]>;
 	/** The job fulfilling a given tool part, if any (spawn-hook dedup). */
 	findJobByToolCallId(chatId: string, toolCallId: string): JobRecord | null;
 	/** Delete every job record for a chat — running or finished (session-
