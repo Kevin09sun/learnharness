@@ -113,8 +113,8 @@ const jobRunner = createJobRunner({
 		providerKeyPresent(provider) ? null : providerKeyMissingEnvelope(provider, [tier]),
 	// Search port wave (2026-09-20): the researcher's web_search runs on the
 	// injected port — resolved FRESH per job (key rotations land immediately).
-	// null = honestly unavailable; the dispatch-level drop (below) uses the
-	// same signal so keyless servers never see the research tool at all.
+	// null = honestly unavailable; the research job is registered with or
+	// without a search key.
 	searchProvider,
 });
 /** The app's ONE extraction pipeline instance — both front doors share it:
@@ -440,8 +440,8 @@ export async function handleChatInput(
 	// CROSS-STREAM SEAM (P2 reconciliation, 2026-09-19): `toolToggles`
 	// rides the build opts as the user-level DELTA map (absent key =
 	// enabled). The definitive toggleable set is TOGGLEABLE_TOOLS — the
-	// sub-agent JOB tools (research/demo/visual/pdf; adjudicated with the
-	// user: quiz/ask/fs/plan/probe_done are always-on).
+	// sub-agent job tools plus `web` (the tutors' direct web_search/web_fetch;
+	// adjudicated with the user: quiz/ask/fs/plan/probe_done are always-on).
 	if (isSubscriptionProvider(conversation.provider)) requestCycle = new SubscriptionRequestCycle({
 		initialMessages: asAgentMessages(agentMessages),
 		staged: stagedAutomatic ? asAgentMessages(appends) : undefined,
@@ -493,6 +493,9 @@ export async function handleChatInput(
 							spawn: (job, input) => void jobRunner.runJob(job.id, input),
 							searchAvailable,
 						},
+						// Direct web tools (2026-11-12): the live provider seam,
+						// behind the settings `web` switch.
+						search: searchProvider,
 					},
 					agentOpts,
 				)
@@ -507,15 +510,18 @@ export async function handleChatInput(
 						// and future graph-tools poses stay valid).
 						graphNodes: () => stores.graphStore.readNodes(),
 						// THE RARELY-NEEDED SET (owner round 10): research + pdf jobs
-						// (same runner/gating as the teacher's — research honestly
-						// absent when no engine is live) and the map readers behind
-						// the SAME settings gate as the prober's.
+						// (same runner/gating as the teacher's; the research job is
+						// registered with or without a search key) and the map
+						// readers behind the SAME settings gate as the prober's.
 						jobs: {
 							chatId,
 							jobStore: stores.jobStore,
 							spawn: (job, input) => void jobRunner.runJob(job.id, input),
 							searchAvailable,
 						},
+						// Direct web tools (2026-11-12): the live provider seam,
+						// behind the settings `web` switch.
+						search: searchProvider,
 						...(graphToolsEnabled(effective) ? { graph: { chatStore: stores.chatStore, graphStore: stores.graphStore } } : {}),
 					},
 					agentOpts,
@@ -527,9 +533,11 @@ export async function handleChatInput(
 						chatStore: stores.chatStore,
 						jobStore: stores.jobStore,
 						spawn: (job, input) => void jobRunner.runJob(job.id, input),
-						// The registry drop's signal (2026-09-20): no live engine
-						// = no research tool in the teacher's registry.
+						// Research is registered with or without a search key; searchAvailable is a retained status seam.
 						searchAvailable,
+						// Direct web tools (2026-11-12): the live provider seam,
+						// behind the settings `web` switch.
+						search: searchProvider,
 					},
 					agentOpts,
 				)
@@ -544,6 +552,9 @@ export async function handleChatInput(
 						jobStore: stores.jobStore,
 						spawn: (job, input) => void jobRunner.runJob(job.id, input),
 						searchAvailable,
+						// Direct web tools (2026-11-12): the live provider seam,
+						// behind the settings `web` switch.
+						search: searchProvider,
 						// The map reader (wave 7): the prober reads the learner's
 						// knowledge graph through tools when the gate opens —
 						// graph master switch AND the agent.graphTools toggle.

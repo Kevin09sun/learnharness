@@ -32,6 +32,9 @@ describe("streamingToolActivity (the turn-activity label)", () => {
 		assert.equal(streamingToolActivity([msg("assistant", [toolPart("read", "input-streaming")])]), "Reading a file…");
 		assert.equal(streamingToolActivity([msg("assistant", [toolPart("find", "input-streaming")])]), "Finding files…");
 		assert.equal(streamingToolActivity([msg("assistant", [toolPart("ls", "input-streaming")])]), "Listing a directory…");
+		// the conversation tutors' web lookups (2026-11-12)
+		assert.equal(streamingToolActivity([msg("assistant", [toolPart("web_search", "input-streaming")])]), "Searching the web…");
+		assert.equal(streamingToolActivity([msg("assistant", [toolPart("web_fetch", "input-streaming")])]), "Reading a web page…");
 	});
 
 	it("job dispatch tools get their own labels; unknown tools stay generic", () => {

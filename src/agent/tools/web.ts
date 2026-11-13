@@ -5,13 +5,15 @@ import { serverExecute } from "../tool-execute.ts";
 // (2026-09-20); this alias keeps callers churn-free.
 import type { SearchHit as WebSearchResult, SearchProvider } from "../../core/search.ts";
 export type { WebSearchResult };
+import type { EnabledTools } from "../../core/pending.ts";
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import TurndownService from "turndown";
 
 /**
- * Server-side web tools for the researcher sub-agent — a minimal port of the
- * pi extensions (~/.pi/agent/extensions/web-search + web-fetch):
+ * Server-side web tools for the researcher sub-agent and the conversation
+ * tutors (`tutorWebTools`) — a minimal port of the pi extensions
+ * (~/.pi/agent/extensions/web-search + web-fetch):
  *
  *   web_search(query, count?) → {title, url, snippet}[]   (injected search port)
  *   web_fetch(url)            → readable markdown text     (Readability + Turndown,
@@ -29,6 +31,13 @@ import TurndownService from "turndown";
  * every failure path return a clear error STRING as the tool output, so the
  * researcher can adapt (or report) instead of crashing.
  */
+
+/** The no-provider text — the tool output AND the test pin. A tutor says
+ *  this plainly; it must not present an unchecked claim as checked. */
+export const WEB_SEARCH_UNAVAILABLE: string =
+	"web_search is not available: no search engine is configured. " +
+	"A Tavily, Brave, Exa, Firecrawl, or Ollama search API key can be added in Settings. " +
+	"Say plainly that web search is unavailable; do not present an unchecked claim as checked.";
 
 // ── web_search ───────────────────────────────────────────────────────────────
 // (WebSearchResult is the core SearchHit, re-exported above.)
@@ -97,9 +106,9 @@ async function fetchAndExtract(url: string): Promise<string> {
 
 	const contentType = resp.headers.get("content-type") ?? "";
 	if (contentType.includes("application/pdf")) {
-		// Pointer, not dead-end (researcher PDF wave, 2026-10-07): the
-		// researcher's web_fetch_pdf tool downloads + triages PDFs.
-		return `web_fetch: this URL is a PDF document — call web_fetch_pdf on it to download and read it.`;
+		// Pointer, not dead-end (researcher PDF wave, 2026-10-07): a caller
+		// with web_fetch_pdf reads it directly; a tutor dispatches research.
+		return `web_fetch: this URL is a PDF document. If you have web_fetch_pdf, call it on this URL; otherwise dispatch research to read it.`;
 	}
 	if (/image\/|audio\/|video\/|zip|octet-stream/.test(contentType)) {
 		throw new Error(`Unsupported content type: ${contentType.split(";")[0]}`);
@@ -144,12 +153,7 @@ export function createWebTools(search: () => SearchProvider | null): Record<stri
 			parameters: webSearchInput,
 			execute: serverExecute("web_search", webSearchInput, async ({ query, count }): Promise<WebSearchResult[] | string> => {
 				const provider = search();
-				if (!provider) {
-					return (
-						"web_search is not available: no search engine is configured. " +
-						"Set a Tavily, Brave, Exa, Firecrawl, or Ollama search API key in settings. Report in your brief that web search is unavailable."
-					);
-				}
+				if (!provider) return WEB_SEARCH_UNAVAILABLE;
 				try {
 					return await provider.search(query, count ?? 5);
 				} catch (err) {
@@ -185,6 +189,22 @@ export function createWebTools(search: () => SearchProvider | null): Record<stri
 			}),
 		},
 	};
+}
+
+/**
+ * The conversation tutors' web tools (direct web search, 2026-11-12): the
+ * same tools the researcher runs, behind the settings `web` switch. An
+ * absent seam (not wired: tests, or a wiring bug) or `web: false` → an
+ * empty registry. The composition root always passes it; with no search
+ * key the provider resolves null per call, so both tools still register —
+ * web_fetch works and web_search reports search is not set up.
+ */
+export function tutorWebTools(
+	search: (() => SearchProvider | null) | undefined,
+	enabled?: EnabledTools,
+): Record<string, AgentTool<any>> {
+	if (!search || enabled?.web === false) return {};
+	return createWebTools(search);
 }
 
 /** The provider-less backstop (tests pin the shape with it; the runner

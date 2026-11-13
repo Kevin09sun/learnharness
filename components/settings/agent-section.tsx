@@ -31,9 +31,11 @@
  * grays whole-row (a choice without a key would only BLOCK another
  * engine's auto-activation).
  *
- * Tools — the owner's final list (2026-09-19): research, demo, visual, pdf.
- * Absent key = enabled in the schema; the UI writes explicit booleans for
- * all four (simpler to reason about, sanitize-equivalent).
+ * Tools — the owner's final list (2026-09-19): research, demo, visual, pdf;
+ * `web` (owner, 2026-11-12) governs the tutors' direct web_search and
+ * web_fetch together. Absent key = enabled in the schema; the UI writes
+ * explicit booleans for all five (simpler to reason about,
+ * sanitize-equivalent).
  *
  * Prompts: GET /api/settings/prompts segments — Teacher, Prober, Practice,
  * then Shared LAST. The server returns each agent's actual segments,
@@ -91,7 +93,7 @@ const SLOT_META: Record<ModelSlotName, { label: string; roster: string }> = {
 
 /** The owner's final toggleable-tool list (confirm with the user before
  *  changing — the Teacher stream settled this 2026-09-19). */
-export const TOGGLE_TOOLS = ["research", "demo", "visual", "pdf"] as const;
+export const TOGGLE_TOOLS = ["research", "demo", "visual", "pdf", "web"] as const;
 
 const THINKING_LEVELS: readonly ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 
@@ -844,7 +846,7 @@ export function AgentSection({
 				{TOGGLE_TOOLS.map((id) => (
 					<SettingsRow
 						key={id}
-						label={`Tool · ${id}`}
+						label={id === "web" ? "Tool · web search" : `Tool · ${id}`}
 						testid={`tool-row-${id}`}
 					>
 						<Toggle

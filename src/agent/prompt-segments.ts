@@ -35,19 +35,20 @@ import { FRAGMENT_RE, isValidSegmentPath, type PromptAgent, type PromptSegmentIn
 const PROMPTS_DIR = path.join(PATHS.root, "src", "agent", "prompts");
 
 /** Shared fragments the PRACTICE agent composes: the VOICE, ACCURACY,
- *  and MENTAL-MODEL chunks joined the formatting guide (owner rounds 13
- *  and the prompt-refinement round of 2026-10-07) — personality, the
- *  truth contract, and the thinking-fields doctrine are ONE law across
+ *  MENTAL-MODEL and WEB-LOOKUP chunks joined the formatting guide (owner
+ *  rounds 13, the prompt-refinement round of 2026-10-07, and the direct-web
+ *  round of 2026-11-12) — personality, the truth contract, the
+ *  thinking-fields doctrine and the web-lookup method are ONE law across
  *  every agent. The question/confidence/file mechanics stay out
  *  (practice has no such tools). */
-const PRACTICE_SHARED_FRAGMENTS = ["10-voice.md", "15-accuracy.md", "16-mental-model.md", "40-formatting.md"];
+const PRACTICE_SHARED_FRAGMENTS = ["10-voice.md", "15-accuracy.md", "16-mental-model.md", "35-web.md", "40-formatting.md"];
 
 /** Shared fragments the TEST PREP agent composes: voice, accuracy, the
- *  learner-file mechanics (it reads the outline/slides) and formatting.
- *  The teaching base, question tools and confidence mechanics stay out —
- *  test prep has its own no-hints/no-explanation doctrine and no quiz or
- *  confidence tools (owner design, 2026-11-10). */
-const TESTPREP_SHARED_FRAGMENTS = ["10-voice.md", "15-accuracy.md", "30-learner-files.md", "40-formatting.md"];
+ *  learner-file mechanics (it reads the outline/slides), web lookups and
+ *  formatting. The teaching base, question tools and confidence mechanics
+ *  stay out — test prep has its own no-hints/no-explanation doctrine and
+ *  no quiz or confidence tools (owner design, 2026-11-10). */
+const TESTPREP_SHARED_FRAGMENTS = ["10-voice.md", "15-accuracy.md", "30-learner-files.md", "35-web.md", "40-formatting.md"];
 
 /** Absolute path for an override file (unchecked — validate first). */
 function overrideFileFor(segmentPath: string): string {

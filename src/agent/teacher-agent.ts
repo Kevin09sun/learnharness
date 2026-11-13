@@ -117,7 +117,8 @@ export interface AgentBuildOptions {
 	/** The resolved per-user tool toggles (core/pending EnabledTools — the
 	 *  2026-09-19 P2 bridge: Platform's chat-handler passes
 	 *  effective.agent.tools; the factories drop any tool explicitly false.
-	 *  THE DEFINITIVE toggleable set is TOGGLEABLE_TOOLS (job tools only);
+	 *  THE DEFINITIVE toggleable set is TOGGLEABLE_TOOLS (the sub-agent job
+	 *  tools plus `web`, which governs the tutors' direct web_search/web_fetch);
 	 *  the filtering is generic, but writes validate against the list). */
 	toolToggles?: EnabledTools;
 	/** Per-segment system-prompt override SWITCHES (the settings record's
@@ -345,7 +346,7 @@ export function bareQuestionTools(): Record<string, AgentTool<any>> {
  * Practice uses ordinary final prose, not the explicit output tool.
  */
 export function createPracticeAgent(ctx: PracticeToolContext, opts: AgentBuildOptions = {}) {
-	const tools = opts.tools ?? practiceTools(ctx);
+	const tools = opts.tools ?? practiceTools(ctx, opts.toolToggles);
 	return baseAgentOptions("practice", opts, Object.values(tools));
 }
 
@@ -359,7 +360,7 @@ export function createPracticeAgent(ctx: PracticeToolContext, opts: AgentBuildOp
  * batch and via the shared stop hook for a mixed batch.
  */
 export function createTestPrepAgent(ctx: TestPrepToolContext, opts: AgentBuildOptions = {}) {
-	const tools = opts.tools ?? testPrepTools(ctx);
+	const tools = opts.tools ?? testPrepTools(ctx, opts.toolToggles);
 	return baseAgentOptions("testprep", opts, Object.values(tools));
 }
 

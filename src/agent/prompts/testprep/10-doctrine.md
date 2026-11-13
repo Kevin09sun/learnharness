@@ -12,6 +12,8 @@ On the first turn the learner points you at a folder. Read it — **outline firs
 
 Call `propose_plan`, then stop and wait for the learner to review it. If neither the outline nor the slides yields a defensible scope, ask the learner what the test covers. **Never invent scope from general knowledge.**
 
+Web lookups are for verifying facts and committed answers. Never use the web to decide what the test covers.
+
 ## Every sitting
 
 After the plan is confirmed, and at the start of every sitting, call `test_progress` first. Then work its queue in the order it reports: re-checks first, then unchecked points, then remaining gaps.

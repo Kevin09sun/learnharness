@@ -1027,6 +1027,11 @@ describe("tool + renderer registry wiring", () => {
 		for (const t of ["list_sessions", "list_propositions"]) {
 			assert.equal(artifactRenderers[t], ToolCallCard, `${t} renders the tool-call card`);
 		}
+		// the conversation tutors' web lookups (2026-11-12) join the same
+		// quiet card — without these a settled call rendered nothing
+		for (const t of ["web_search", "web_fetch"]) {
+			assert.equal(artifactRenderers[t], ToolCallCard, `${t} renders the tool-call card`);
+		}
 	});
 
 	it("the tool-call card: the prober's graph tools — collapsed headline + their compact row output", () => {
@@ -1116,5 +1121,29 @@ describe("tool + renderer registry wiring", () => {
 		);
 		assert.match(lsHtml, /ls/);
 		assert.match(lsHtml, /~/);
+	});
+
+	it("the tool-call card: the web lookups headline the query / the URL", () => {
+		const searchPart = {
+			type: "tool-web_search",
+			state: "output-available",
+			toolCallId: "w1",
+			input: { query: "ap calculus bc exam format 2027" },
+			output: "results",
+		};
+		const searchHtml = renderToStaticMarkup(<ToolCallCard part={searchPart as never} />);
+		const searchHeadline = searchHtml.split("<summary")[1]?.split("</summary>")[0] ?? "";
+		assert.match(searchHeadline, /ap calculus bc exam format 2027/, "the query is the collapsed headline");
+
+		const fetchPart = {
+			type: "tool-web_fetch",
+			state: "output-available",
+			toolCallId: "w2",
+			input: { url: "https://e.com/page" },
+			output: "page text",
+		};
+		const fetchHtml = renderToStaticMarkup(<ToolCallCard part={fetchPart as never} />);
+		const fetchHeadline = fetchHtml.split("<summary")[1]?.split("</summary>")[0] ?? "";
+		assert.match(fetchHeadline, /https:\/\/e\.com\/page/, "the URL is the collapsed headline");
 	});
 });

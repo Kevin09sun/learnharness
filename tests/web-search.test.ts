@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createWebTools } from "../src/agent/tools/web.ts";
+import { createWebTools, tutorWebTools, WEB_SEARCH_UNAVAILABLE } from "../src/agent/tools/web.ts";
 import { jobTools } from "../src/agent/tools/jobs.ts";
 import { runResearcherAgent } from "../src/agent/subagents/researcher.ts";
 import { createFauxCore, fauxAssistantMessage, fauxText, fauxToolCall, type FauxResponseStep } from "@earendil-works/pi-ai";
@@ -27,10 +27,8 @@ describe("web_search on the injected port (web.ts)", () => {
 		const { web_search } = createWebTools(() => null);
 		assert.ok(web_search, "web_search is still exposed without a provider");
 		const out = await web_search!.execute!("c1", { query: "anything" });
-		const missing = "web_search is not available: no search engine is configured. " +
-			"Set a Tavily, Brave, Exa, Firecrawl, or Ollama search API key in settings. Report in your brief that web search is unavailable.";
-		assert.equal(out.details, missing);
-		assert.deepEqual(out.content, [{ type: "text", text: missing }]);
+		assert.equal(out.details, WEB_SEARCH_UNAVAILABLE);
+		assert.deepEqual(out.content, [{ type: "text", text: WEB_SEARCH_UNAVAILABLE }]);
 		assert.notEqual(out.isError, true, "missing keys remain ordinary recoverable text, not a native error");
 	});
 
@@ -102,6 +100,52 @@ describe("web_search on the injected port (web.ts)", () => {
 
 			const ftp = await web_fetch!.execute!("c-ftp", { url: "ftp://example.com/file" });
 			assert.match(String(ftp.details), /invalid URL/, "non-http(s) schemes still rejected");
+		} finally {
+			globalThis.fetch = realFetch;
+		}
+	});
+});
+
+describe("tutorWebTools", () => {
+	it("no search seam → no web tools", () => {
+		assert.deepEqual(Object.keys(tutorWebTools(undefined)), []);
+	});
+	it("web: false → no web tools, even with a live provider", () => {
+		assert.deepEqual(Object.keys(tutorWebTools(() => stubProvider(), { web: false })), []);
+	});
+	it("seam present, switch absent or true → both tools", () => {
+		assert.deepEqual(Object.keys(tutorWebTools(() => null)), ["web_search", "web_fetch"]);
+		assert.deepEqual(Object.keys(tutorWebTools(() => stubProvider(), { web: true })), ["web_search", "web_fetch"]);
+	});
+	it("other switches do not remove the web tools", () => {
+		assert.deepEqual(Object.keys(tutorWebTools(() => null, { research: false })), ["web_search", "web_fetch"]);
+	});
+	it("the provider is resolved per call", async () => {
+		let live: SearchProvider | null = null;
+		const { web_search } = tutorWebTools(() => live);
+		assert.equal((await web_search!.execute!("c1", { query: "q" })).details, WEB_SEARCH_UNAVAILABLE);
+		live = stubProvider();
+		assert.deepEqual((await web_search!.execute!("c2", { query: "q" })).details, [{ title: "t", url: "https://e.com/", snippet: "s" }]);
+	});
+	it("the unavailable text reads correctly for a tutor", () => {
+		assert.equal(
+			WEB_SEARCH_UNAVAILABLE,
+			"web_search is not available: no search engine is configured. " +
+				"A Tavily, Brave, Exa, Firecrawl, or Ollama search API key can be added in Settings. " +
+				"Say plainly that web search is unavailable; do not present an unchecked claim as checked.",
+		);
+	});
+	it("a PDF link points at tools the caller may have", async () => {
+		const realFetch = globalThis.fetch;
+		globalThis.fetch = (async () =>
+			new Response("%PDF", { status: 200, headers: { "content-type": "application/pdf" } })) as typeof fetch;
+		try {
+			const { web_fetch } = tutorWebTools(() => null);
+			const out = await web_fetch!.execute!("c1", { url: "https://e.com/a.pdf" });
+			assert.equal(
+				out.details,
+				"web_fetch: this URL is a PDF document. If you have web_fetch_pdf, call it on this URL; otherwise dispatch research to read it.",
+			);
 		} finally {
 			globalThis.fetch = realFetch;
 		}

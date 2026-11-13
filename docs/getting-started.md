@@ -13,7 +13,7 @@ Open **Settings → Providers** and configure a connection:
 
 Choose **Strong**, **Cheap**, and **Vision** models in Settings. There are no factory model selections. New sessions start with Strong; background roles use their assigned slots or role overrides. A model selected inside an existing session belongs to that session and does not change background-role choices.
 
-Optional web search supports Tavily, Brave, Exa, Firecrawl, and hosted Ollama search; configure a key for the engine you want to use. Research can still fetch known URLs without a search key. Dictation has its own service key below.
+Every conversation tutor — Teach (including the opening assessment), Practice and Test prep — can search the web and read a page inside its own reply when it is unsure of a fact or the answer may have changed. A **web search** switch under Settings → Agent turns this off without affecting background research. Optional web search supports Tavily, Brave, Exa, Firecrawl, and hosted Ollama search; configure a key for the engine you want to use under **Settings → Providers → Search**. Without a search key a tutor can still read a page it is given, and background research can still fetch known URLs; a PDF on the web goes through background research. Dictation has its own service key below.
 
 ## Start a session
 

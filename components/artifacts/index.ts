@@ -54,6 +54,10 @@ export const artifactRenderers: Record<string, ComponentType<ArtifactPartProps>>
 	// discipline (their results are pre-formatted strings too).
 	list_sessions: ToolCallCard,
 	list_propositions: ToolCallCard,
+	// The conversation tutors' web lookups (2026-11-12): the same quiet
+	// expandable card — the query / URL headlines the collapsed line.
+	web_search: ToolCallCard,
+	web_fetch: ToolCallCard,
 	// Test prep (2026-11-10): the proposed plan is the one artifact the
 	// learner acts on — it edits and confirms it inline. The rest of the
 	// toolset is trace-only, in the quiet expanded-card register.

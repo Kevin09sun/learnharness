@@ -28,7 +28,8 @@ process.env.LH_DATA_DIR = TMP_DATA;
 
 const { questionResult } = await import("../src/agent/tool-execute.ts");
 const { createProberAgent, createTeacherAgent } = await import("../src/agent/teacher-agent.ts");
-import type { ProberToolContext } from "../src/agent/tools.ts";
+const { createProberTools, createTeacherTools } = await import("../src/agent/tools.ts");
+import type { ProberToolContext, TeacherToolContext } from "../src/agent/tools.ts";
 const { jobStore } = await import("../src/store/jobs.ts");
 const { parseAgentSettingsBody } = await import("../src/server/settings-body.ts");
 const { chatStore } = await import("../src/store/chats.ts");
@@ -96,6 +97,12 @@ describe("parseAgentSettingsBody: tool keys validate at write time", () => {
 		assert.deepEqual(r.ok && r.settings.tools, { research: false, pdf: false });
 	});
 
+	it("the web switch (web) is writable — the tutors' direct web tools", () => {
+		const r = parse({ web: false });
+		assert.equal(r.ok, true);
+		assert.equal(r.ok && r.settings.tools?.web, false);
+	});
+
 	it("the quizzing-mechanics key (explain) is writable (owner 2026-09-27)", () => {
 		const r = parse({ explain: true });
 		assert.equal(r.ok, true);
@@ -105,7 +112,7 @@ describe("parseAgentSettingsBody: tool keys validate at write time", () => {
 	it("unknown keys are rejected with the supported list (the quiz wedge never persists)", () => {
 		const r = parse({ quiz: false });
 		assert.equal(r.ok, false);
-		assert.match(!r.ok && r.error, /unknown tool "quiz" \(supported: research, demo, visual, pdf, explain\)/);
+		assert.match(!r.ok && r.error, /unknown tool "quiz" \(supported: research, demo, visual, pdf, web, explain\)/);
 		const typo = parse({ reasearch: false });
 		assert.equal(typo.ok, false);
 		assert.match(!typo.ok && typo.error, /unknown tool "reasearch"/);
@@ -114,5 +121,43 @@ describe("parseAgentSettingsBody: tool keys validate at write time", () => {
 	it("absent tools field is fine (absent = enabled everywhere)", () => {
 		const r = parseAgentSettingsBody({}) as { ok: boolean };
 		assert.equal(r.ok, true);
+	});
+});
+
+describe("direct web tools: teacher and prober", () => {
+	// Both registries only close over the context here — nothing executes —
+	// so the bridge tests' in-memory seam is enough for the fixtures.
+	const chatId = chatStore.createChat("Direct web tools test").id;
+	const teacherCtx: TeacherToolContext = { chatId, chatStore, jobStore, spawn: () => {} };
+	const proberCtx: ProberToolContext = { chatId, chatStore, deliver: () => {}, jobStore, spawn: () => {} };
+
+	it("teacher: search seam → both tools; web:false → neither", () => {
+		const on = createTeacherTools({ ...teacherCtx, search: () => null });
+		assert.ok(on.web_search && on.web_fetch);
+		const off = createTeacherTools({ ...teacherCtx, search: () => null }, { web: false });
+		assert.equal(off.web_search, undefined);
+		assert.equal(off.web_fetch, undefined);
+		assert.ok(off.research, "the research job is untouched by the web switch");
+	});
+
+	it("teacher: no search seam → neither tool", () => {
+		const tools = createTeacherTools(teacherCtx);
+		assert.equal(tools.web_search, undefined);
+		assert.equal(tools.web_fetch, undefined);
+	});
+
+	it("prober: search seam → both tools; web:false → neither; probe_done stays", () => {
+		const on = createProberTools({ ...proberCtx, search: () => null });
+		assert.ok(on.web_search && on.web_fetch);
+		const off = createProberTools({ ...proberCtx, search: () => null }, { web: false });
+		assert.equal(off.web_search, undefined);
+		assert.equal(off.web_fetch, undefined);
+		assert.ok(off.probe_done);
+	});
+
+	it("research:false leaves the web tools in place", () => {
+		const tools = createTeacherTools({ ...teacherCtx, search: () => null }, { research: false });
+		assert.equal(tools.research, undefined);
+		assert.ok(tools.web_search && tools.web_fetch);
 	});
 });

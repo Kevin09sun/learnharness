@@ -12,10 +12,12 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { createFauxCore } from "@earendil-works/pi-ai";
 
 import { applyResult } from "../src/core/test-prep.ts";
 import type { AnswerResult, PlanDraftSection, PointStatus, TestRecord } from "../src/core/test-prep.ts";
 import { QUESTION_TOOLS, toolQuestionKind } from "../src/core/pending.ts";
+import { createTestPrepAgent } from "../src/agent/teacher-agent.ts";
 import {
 	checkPointInputObject,
 	testPrepTools,
@@ -121,6 +123,15 @@ function ctxOf(tests: TestPrepToolContext["tests"]): TestPrepToolContext {
 	return { chatId: "chat_now", testId: "test_1", tests };
 }
 
+/** A scripted pi engine — the agent factories need one injected (BYOK). */
+function fauxEngine() {
+	const faux = createFauxCore({});
+	return { model: faux.getModel(), streamFn: faux.streamSimple };
+}
+
+/** The job context fixture: both jobs available keylessly. */
+const JOBS = { chatId: "chat_now", jobStore: null as never, spawn: (() => {}) as never, searchAvailable: () => false };
+
 const CHECK_INPUT = {
 	pointId: "p_unchecked",
 	question: "What are the stages of mitosis, in order?",
@@ -170,8 +181,7 @@ describe("testPrepTools registry", () => {
 		// agent could not read the folder it was pointed at.
 		const plain = testPrepTools(ctxOf(fakeTests(recordOf()).tests));
 		assert.equal(plain.pdf, undefined);
-		const jobs = { chatId: "chat_now", jobStore: null as never, spawn: (() => {}) as never, searchAvailable: () => false };
-		const withJobs = testPrepTools({ ...ctxOf(fakeTests(recordOf()).tests), jobs });
+		const withJobs = testPrepTools({ ...ctxOf(fakeTests(recordOf()).tests), jobs: JOBS });
 		assert.ok(withJobs.pdf, "pdf job present with a jobs context");
 		assert.ok(withJobs.research, "the same job set practice carries");
 	});
@@ -179,6 +189,42 @@ describe("testPrepTools registry", () => {
 	it("check_point is a question tool: it folds onto the explain kind (the turn pauses)", () => {
 		assert.ok((QUESTION_TOOLS as readonly string[]).includes("check_point"));
 		assert.equal(toolQuestionKind("check_point"), "explain");
+	});
+});
+
+// ── direct web tools (2026-11-12) ───────────────────────────────────────────
+
+describe("direct web tools", () => {
+	const ctx = { ...ctxOf(fakeTests(recordOf()).tests), jobs: JOBS };
+
+	it("search seam → both web tools; web:false → neither; nothing else is filtered", () => {
+		const on = testPrepTools({ ...ctx, search: () => null });
+		assert.ok(on.web_search && on.web_fetch);
+		const off = testPrepTools({ ...ctx, search: () => null }, { web: false, research: false, pdf: false });
+		assert.equal(off.web_search, undefined);
+		assert.equal(off.web_fetch, undefined);
+		assert.ok(off.research, "research:false is ignored here, as before");
+		assert.ok(off.pdf, "pdf:false is ignored here, as before");
+		assert.deepEqual(
+			Object.keys(off).sort(),
+			Object.keys(testPrepTools(ctx)).sort(),
+			"research:false and pdf:false are ignored here, as before",
+		);
+	});
+
+	it("no search seam → no web tools", () => {
+		const tools = testPrepTools(ctx);
+		assert.equal(tools.web_search, undefined);
+		assert.equal(tools.web_fetch, undefined);
+	});
+
+	it("the factory forwards the web switch", () => {
+		const on = createTestPrepAgent({ ...ctx, search: () => null }, { engine: fauxEngine() });
+		const onNames = on.state.tools.map((tool) => tool.name);
+		assert.ok(onNames.includes("web_search") && onNames.includes("web_fetch"), "the search seam reaches the registry");
+		const off = createTestPrepAgent({ ...ctx, search: () => null }, { engine: fauxEngine(), toolToggles: { web: false } });
+		const offNames = off.state.tools.map((tool) => tool.name);
+		assert.ok(!offNames.includes("web_search") && !offNames.includes("web_fetch"));
 	});
 });
 

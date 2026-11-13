@@ -73,8 +73,8 @@ one that delivers that on every model route.
 
 One new shared fragment, included for all four tutors:
 
-> **Web lookups.** You can search the web with `web_search` and read a page
-> with `web_fetch`. Use them when you are not certain of a fact, when the
+> **Web lookups.** When `web_search` and `web_fetch` are among your tools, you
+> can search the web with `web_search` and read a page with `web_fetch`. Use them when you are not certain of a fact, when the
 > answer may have changed recently, or when the learner asks you to look
 > something up. Do not search for what you know well. Search with a few
 > focused queries, read the most authoritative result rather than relying on
@@ -95,8 +95,15 @@ Added to the Test prep doctrine:
   and governs both tools together.
 - No hard limit on searches per reply in code; the instruction wording
   ("a few focused queries") is the only brake.
-- While a lookup runs, the chat shows it the same way other non-question tool
-  calls are shown today; no new visual treatment.
+- A lookup shows in the chat as the same quiet expandable card that file
+  reads use, headed by the query or the link. (Amended with the plan,
+  owner-approved 2026-11-12: without a registered card a finished lookup
+  would render nothing.)
+- The switch row is labelled "Tool · web search", matching the existing
+  "Tool · research" rows. (Amended with the plan, owner-approved.)
+- The message `web_fetch` returns for a PDF link is reworded so a tutor,
+  which has no `web_fetch_pdf`, is sent to `research`. (Amended with the
+  plan, owner-approved.)
 - The "search is not set up" tool message, currently worded for the
   researcher ("Report in your brief…"), is reworded so it reads correctly for
   both the researcher and a tutor.

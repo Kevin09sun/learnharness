@@ -24,14 +24,19 @@ interface ToolCallPart {
 }
 
 /** The collapsed headline argument per tool: path for read/ls/show_image, pattern for
- *  find/grep — shown as given, never resolved (the absolute path lands in
- *  the expanded view when present in the output). */
+ *  find/grep, query for web_search, url for web_fetch — shown as given, never
+ *  resolved (the absolute path lands in the expanded view when present in the
+ *  output). */
 function headlineArg(tool: string, input: unknown): string {
 	const inp = (input ?? {}) as Record<string, unknown>;
 	if (tool === "read" || tool === "ls" || tool === "show_image") {
 		const p = typeof inp.path === "string" && inp.path.length > 0 ? inp.path : "~";
 		return p;
 	}
+	// The conversation tutors' web lookups (2026-11-12): the query / URL is
+	// the call's subject — shown as given.
+	if (tool === "web_search" && typeof inp.query === "string") return inp.query;
+	if (tool === "web_fetch" && typeof inp.url === "string") return inp.url;
 	if (typeof inp.pattern === "string") return inp.pattern;
 	// list_propositions: the session id is the call's subject — the
 	// collapsed line reads "list_propositions chat_…". Shown as given

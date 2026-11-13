@@ -1,11 +1,11 @@
 /**
  * TEST-PREP PROMPT (test prep, 2026-11-10): the test-prep agent composes its
  * OWN base + doctrine (never the teaching base) and a CURATED shared
- * appendix — voice, accuracy, learner files and formatting. The question
- * mechanics and confidence chunks stay out: test prep has its own
- * no-hints/no-explanation doctrine and no quiz/confidence tools.
+ * appendix — voice, accuracy, learner files, web lookups and formatting.
+ * The question mechanics and confidence chunks stay out: test prep has its
+ * own no-hints/no-explanation doctrine and no quiz/confidence tools.
  *
- * The order pin: own fragments first, then the four allowlisted shared
+ * The order pin: own fragments first, then the five allowlisted shared
  * files in filename order — the same composition order the loader uses.
  */
 
@@ -19,7 +19,7 @@ import { composeInstructions } from "../src/agent/teacher-agent.ts";
 const promptText = (relative: string) =>
 	readFileSync(new URL(`../src/agent/prompts/${relative}`, import.meta.url), "utf8").trim();
 
-const TESTPREP_SHARED = ["10-voice.md", "15-accuracy.md", "30-learner-files.md", "40-formatting.md"];
+const TESTPREP_SHARED = ["10-voice.md", "15-accuracy.md", "30-learner-files.md", "35-web.md", "40-formatting.md"];
 
 describe("testprep prompt composition", () => {
 	it("composes the doctrine and the formatting appendix — never the teaching base or question mechanics", () => {
@@ -57,7 +57,12 @@ describe("testprep prompt composition", () => {
 		);
 	});
 
-	it("lists own fragments first, then exactly the four allowlisted shared files", () => {
+	it("test prep doctrine bars the web from scoping", () => {
+		const doctrine = promptText("testprep/10-doctrine.md");
+		assert.ok(doctrine.includes("Never use the web to decide what the test covers."));
+	});
+
+	it("lists own fragments first, then exactly the five allowlisted shared files", () => {
 		assert.deepEqual(
 			listSourceSegments("testprep").map((segment) => segment.path),
 			[
