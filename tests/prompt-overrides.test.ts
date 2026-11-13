@@ -37,7 +37,7 @@ process.env.LH_DATA_DIR = TMP_DATA;
 
 const { PROMPTS_OVERRIDE_DIR } = await import("../config.ts");
 const teacherAgent = await import("../src/agent/teacher-agent.ts");
-const { allSegmentPaths, effectivePromptSegments } = await import("../src/agent/prompt-segments.ts");
+const { allSegmentPaths, effectivePromptSegments, listSourceSegments } = await import("../src/agent/prompt-segments.ts");
 const { isValidSegmentPath } = await import("../src/core/prompt-segments.ts");
 const { promptOverrides } = await import("../src/store/prompt-overrides.ts");
 // Route-level pins drive the actual app/api handlers (framework-free
@@ -185,6 +185,7 @@ describe("the source-derived segment list", () => {
 				"shared/20-question-tools.md",
 				"shared/25-confidence.md",
 				"shared/30-learner-files.md",
+				"shared/35-web.md",
 				"shared/40-formatting.md",
 			],
 		);
@@ -240,6 +241,18 @@ describe("the source-derived segment list", () => {
 		const before = allSegmentPaths().length;
 		assert.equal(before > 5, true, "base + prober fragments + teacher fragments");
 	});
+
+	for (const agent of ["prober", "teacher", "practice", "testprep"] as const) {
+		it(`${agent} composes shared/35-web.md${agent === "practice" ? "" : " after 30-learner-files"} before 40-formatting`, () => {
+			const paths = listSourceSegments(agent).map((s) => s.path);
+			assert.ok(paths.includes("shared/35-web.md"));
+			assert.ok(paths.indexOf("shared/35-web.md") < paths.indexOf("shared/40-formatting.md"));
+			// Practice does not compose 30-learner-files; the other three do.
+			if (agent !== "practice") {
+				assert.ok(paths.indexOf("shared/35-web.md") > paths.indexOf("shared/30-learner-files.md"));
+			}
+		});
+	}
 });
 
 // ─── composeInstructions honors overrides (P2 reconciliation, 2026-09-19) ────
@@ -420,7 +433,7 @@ describe("Practice settings API and effective prompt loading", () => {
 		}
 		assert.deepEqual(view.practice.map((s: { path: string }) => s.path), [
 			"practice/00-base.md", "practice/10-doctrine.md",
-			"shared/10-voice.md", "shared/15-accuracy.md", "shared/16-mental-model.md", "shared/40-formatting.md",
+			"shared/10-voice.md", "shared/15-accuracy.md", "shared/16-mental-model.md", "shared/35-web.md", "shared/40-formatting.md",
 		]);
 		assert.ok(!view.practice.some((s: { path: string }) => s.path === "system-prompt.md"));
 	});
