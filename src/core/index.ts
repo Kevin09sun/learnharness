@@ -94,3 +94,7 @@ export * from "./session-markdown.ts";
 // question order and plan merging (browser-safe; the shell's readiness view
 // binds to these types).
 export * from "./test-prep.ts";
+// ap.ts: the AP session type's pure core — the course record's document
+// manifest, a sitting's scope/kind and label, and the scoped queue built on
+// test-prep's rules (browser-safe).
+export * from "./ap.ts";
