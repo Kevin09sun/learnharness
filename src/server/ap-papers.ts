@@ -18,7 +18,7 @@
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
-import { randomBytes } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { PATHS } from "../../config.ts";
 import { isCollegeBoardUrl } from "../core/ap.ts";
 import { resolveSourcePath } from "../agent/tools/fs-shared.ts";
@@ -177,9 +177,26 @@ async function fetchFollowingCollegeBoard(
 		if (response.status < 300 || response.status >= 400) return response;
 
 		const location = response.headers.get("location");
-		if (!location) return response;
-		if (hop >= MAX_REDIRECTS) throw new Error("Too many redirects");
+		if (!location) {
+			await cancelBody(response);
+			return response;
+		}
+		if (hop >= MAX_REDIRECTS) {
+			await cancelBody(response);
+			throw new Error("Too many redirects");
+		}
+		// Release the hop's socket before the next request; a failed cancel
+		// must not turn a redirect verdict into a different error.
+		await cancelBody(response);
 		current = new URL(location, current).toString();
+	}
+}
+
+async function cancelBody(response: Response): Promise<void> {
+	try {
+		await response.body?.cancel();
+	} catch {
+		// body already consumed or errored; the redirect verdict is what matters
 	}
 }
 
@@ -225,15 +242,32 @@ function isPdf(bytes: Uint8Array): boolean {
 }
 
 /** Write beside the target, then rename over it; any failure removes the
- *  temp file so a refusal or a crash never leaves a half paper behind. */
+ *  temp file so a refusal or a crash never leaves a half paper behind.
+ *  The exclusive open (`wx`) means a file or symlink already at the temp
+ *  path is never followed or truncated. */
 async function writePaperAtomic(target: string, bytes: Uint8Array): Promise<void> {
 	await fsp.mkdir(path.dirname(target), { recursive: true });
-	const temp = `${target}.${randomBytes(6).toString("hex")}.tmp`;
+	const temp = `${target}.${randomUUID()}.tmp`;
+	let created = false;
 	try {
-		await fsp.writeFile(temp, bytes);
+		const handle = await fsp.open(temp, "wx");
+		created = true;
+		try {
+			await handle.writeFile(bytes);
+		} finally {
+			await handle.close();
+		}
 		await fsp.rename(temp, target);
 	} catch (error) {
-		await fsp.rm(temp, { force: true });
+		// Never mask the write error: a leftover temp is harmless (data/.gitignore
+		// skips *.tmp) and a colliding path we did not create is left alone.
+		if (created) {
+			try {
+				await fsp.rm(temp, { force: true });
+			} catch {
+				// report the original failure, not cleanup noise
+			}
+		}
 		throw error;
 	}
 }

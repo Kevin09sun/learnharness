@@ -30,6 +30,7 @@ const {
 	ensureApPapersIgnored,
 	importApPaper,
 } = await import("../src/server/ap-papers.ts");
+const { resolveSourcePath } = await import("../src/agent/tools/fs-shared.ts");
 
 const PDF = "%PDF-1.7\n% test paper\n";
 const OFF_COLLEGE_BOARD = "Only College Board addresses are accepted";
@@ -114,6 +115,39 @@ describe("AP paper store (AP prep stage 1, 2026-11-13)", () => {
 		noLeftovers("course-too-many");
 	});
 
+	it("refuses a protocol-relative redirect Location without requesting it", async () => {
+		const requested: string[] = [];
+		const stub = async (input: RequestInfo | URL): Promise<Response> => {
+			requested.push(String(input));
+			return response(null, { status: 302, headers: { location: "//evil.example/x.pdf" } });
+		};
+		await assert.rejects(
+			downloadApPaper("course-protocol-relative", "https://www.collegeboard.org/x.pdf", "x.pdf", stub as typeof fetch),
+			(error: Error) => error.message === OFF_COLLEGE_BOARD,
+		);
+		assert.equal(requested.length, 1, "the evil hop is never requested");
+		assert.ok(!requested.some((url) => url.includes("evil.example")));
+		noLeftovers("course-protocol-relative");
+	});
+
+	it("refuses a redirect Location that downgrades the scheme", async () => {
+		const requested: string[] = [];
+		const stub = async (input: RequestInfo | URL): Promise<Response> => {
+			requested.push(String(input));
+			return response(null, {
+				status: 302,
+				headers: { location: "http://apcentral.collegeboard.org/x.pdf" },
+			});
+		};
+		await assert.rejects(
+			downloadApPaper("course-downgrade", "https://www.collegeboard.org/x.pdf", "x.pdf", stub as typeof fetch),
+			(error: Error) => error.message === OFF_COLLEGE_BOARD,
+		);
+		assert.equal(requested.length, 1, "the http hop is never requested");
+		assert.ok(!requested.some((url) => url.startsWith("http://")));
+		noLeftovers("course-downgrade");
+	});
+
 	it("refuses a body that is not a PDF", async () => {
 		const stub = async (): Promise<Response> => response("<html>not a paper</html>");
 		await assert.rejects(
@@ -179,6 +213,29 @@ describe("AP paper store (AP prep stage 1, 2026-11-13)", () => {
 		const headers = new Headers(seen?.headers);
 		assert.equal(headers.get("accept"), "application/pdf");
 		assert.ok(headers.get("user-agent"), "a user agent is sent");
+	});
+
+	it("keeps an existing paper when a re-download is refused", async () => {
+		const good = async (): Promise<Response> => response(PDF, undefined, "https://www.collegeboard.org/ced.pdf");
+		await downloadApPaper("course-preserve", "https://www.collegeboard.org/ced.pdf", "ced.pdf", good as typeof fetch);
+		const before = fs.readFileSync(apPaperPath("course-preserve", "ced.pdf"));
+
+		const notPdf = async (): Promise<Response> => response("<html>not a paper</html>");
+		await assert.rejects(
+			downloadApPaper("course-preserve", "https://www.collegeboard.org/ced.pdf", "ced.pdf", notPdf as typeof fetch),
+			(error: Error) => error.message === "Not a PDF",
+		);
+		assert.deepEqual(fs.readFileSync(apPaperPath("course-preserve", "ced.pdf")), before, "the good paper is untouched");
+		assert.deepEqual(paperFiles("course-preserve"), ["ced.pdf"], "no temp file remains");
+
+		const oversized = async (): Promise<Response> =>
+			response(PDF, { headers: { "content-length": String(AP_PAPER_MAX_BYTES + 1) } });
+		await assert.rejects(
+			downloadApPaper("course-preserve", "https://www.collegeboard.org/ced.pdf", "ced.pdf", oversized as typeof fetch),
+			(error: Error) => error.message === "PDF too large",
+		);
+		assert.deepEqual(fs.readFileSync(apPaperPath("course-preserve", "ced.pdf")), before, "still the original bytes");
+		assert.deepEqual(paperFiles("course-preserve"), ["ced.pdf"], "no temp file remains");
 	});
 
 	it("follows a redirect chain that stays on College Board", async () => {
@@ -260,6 +317,34 @@ describe("AP paper store (AP prep stage 1, 2026-11-13)", () => {
 		assert.equal(fs.readFileSync(ignore, "utf8"), "ap-papers/\n");
 	});
 
+	it("ensureApPapersIgnored adds its line to a CRLF .gitignore without rewriting it", () => {
+		const ignore = path.join(TMP_DATA, ".gitignore");
+		fs.writeFileSync(ignore, "debug/\r\n");
+
+		ensureApPapersIgnored();
+		const once = fs.readFileSync(ignore, "utf8");
+		const lines = once.split(/\r?\n/);
+		assert.ok(lines.includes("debug/"), "the original line is intact");
+		assert.ok(lines.includes("ap-papers/"), "the ignore line is present exactly");
+
+		ensureApPapersIgnored();
+		assert.equal(fs.readFileSync(ignore, "utf8"), once, "the second call changes nothing");
+	});
+
+	it("ensureApPapersIgnored separates its line from content with no trailing newline", () => {
+		const ignore = path.join(TMP_DATA, ".gitignore");
+		fs.writeFileSync(ignore, "debug/");
+
+		ensureApPapersIgnored();
+		const once = fs.readFileSync(ignore, "utf8");
+		assert.equal(once, "debug/\nap-papers/\n");
+		assert.ok(once.split(/\r?\n/).includes("debug/"));
+		assert.ok(once.split(/\r?\n/).includes("ap-papers/"));
+
+		ensureApPapersIgnored();
+		assert.equal(fs.readFileSync(ignore, "utf8"), once, "the second call changes nothing");
+	});
+
 	it("importApPaper copies a learner PDF and refuses a non-PDF", async () => {
 		const source = path.join(SOURCE_DIR, "learner.pdf");
 		fs.writeFileSync(source, PDF);
@@ -277,5 +362,37 @@ describe("AP paper store (AP prep stage 1, 2026-11-13)", () => {
 		);
 		assert.equal(apPaperPresent("course-import", "notes.pdf"), false);
 		assert.deepEqual(paperFiles("course-import"), ["learner.pdf"], "the refusal leaves no temp file");
+	});
+
+	it("importApPaper surfaces the learner-path refusal unchanged", async () => {
+		const envFile = path.join(SOURCE_DIR, ".env.example");
+		fs.writeFileSync(envFile, "SYNTHETIC_CREDENTIAL_MARKER\n");
+
+		let expected = "";
+		assert.throws(
+			() => resolveSourcePath(envFile),
+			(error: Error) => {
+				expected = error.message;
+				return expected.includes("is a protected location");
+			},
+		);
+
+		await assert.rejects(
+			importApPaper("course-guard", envFile, "secret.pdf"),
+			(error: Error) => error.message === expected,
+		);
+		assert.equal(apPaperPresent("course-guard", "secret.pdf"), false);
+	});
+
+	it("importApPaper refuses an oversized source before reading it", async () => {
+		const big = path.join(SOURCE_DIR, "big.pdf");
+		fs.writeFileSync(big, "%PDF-1.7");
+		fs.truncateSync(big, AP_PAPER_MAX_BYTES + 1);
+
+		await assert.rejects(
+			importApPaper("course-import-big", big, "big.pdf"),
+			(error: Error) => error.message === "PDF too large",
+		);
+		assert.equal(apPaperPresent("course-import-big", "big.pdf"), false);
 	});
 });
