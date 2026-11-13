@@ -40,6 +40,8 @@ export interface ServerEvents {
 	"chats-changed": Record<string, never>;
 	/** A test-prep test record changed (created, plan saved, result recorded). */
 	"tests-changed": Record<string, never>;
+	/** An AP course record changed (created, plan saved, result or document recorded). */
+	"ap-changed": Record<string, never>;
 	/** Source inventory, display names, or organizational folders changed. */
 	"sources-changed": Record<string, never>;
 	/** Web subscription state changed. No account or credential data on the bus. */
@@ -68,6 +70,7 @@ export const SERVER_EVENT_TYPES = [
 	"activity-changed",
 	"chats-changed",
 	"tests-changed",
+	"ap-changed",
 	"sources-changed",
 	"subscriptions-changed",
 	"record-changed",

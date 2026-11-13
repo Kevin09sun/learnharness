@@ -27,6 +27,10 @@ export const PATHS = {
 	chats: path.join(DATA_ROOT, "chats"),
 	/** Test prep records (one JSON file per test: plan + per-point progress). */
 	tests: path.join(DATA_ROOT, "tests"),
+	/** AP course records (one JSON file per course: units + topics + documents). */
+	ap: path.join(DATA_ROOT, "ap"),
+	/** Downloaded AP papers — local only, never synced with the course record. */
+	apPapers: path.join(DATA_ROOT, "ap-papers"),
 	graph: path.join(DATA_ROOT, "graph"),
 	/** Debug artifacts (env-gated): data/debug/provider-events/<chatId>.jsonl
 	 * raw provider stream recordings (src/agent/provider-events.ts). */
