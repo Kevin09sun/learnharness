@@ -15,6 +15,7 @@ import {
 import { filterEnabledTools, type EnabledTools } from "../core/pending.ts";
 import type { JobRecord } from "../core/contracts.ts";
 import type { JobStore } from "../core/ports.ts";
+import type { SearchProvider } from "../core/search.ts";
 import { jobTools, type DemoInput, type PdfInput, type ResearchInput, type VisualInput } from "./tools/jobs.ts";
 import { planTools, type PlanToolContext } from "./tools/plan.ts";
 import { probeDoneTool, type ProbeDoneContext } from "./tools/probe.ts";
@@ -24,6 +25,7 @@ import { lsTool } from "./tools/ls.ts";
 import { findTool } from "./tools/find.ts";
 import { grepTool } from "./tools/grep.ts";
 import { createShowImageTool } from "./tools/show-image.ts";
+import { tutorWebTools } from "./tools/web.ts";
 import { healToolRecord } from "./tools/heal.ts";
 import type { GraphStore } from "../core/ports.ts";
 
@@ -271,6 +273,10 @@ export interface ProberToolContext extends ProbeDoneContext {
 	spawn: (job: JobRecord, input: ResearchInput | DemoInput | VisualInput | PdfInput) => void;
 	/** Retained search-status seam; research dispatch is available keylessly. */
 	searchAvailable?: () => boolean;
+	/** Direct web tools (2026-11-12): the live search provider seam. Present
+	 *  = web_search/web_fetch are registered (behind the settings `web`
+	 *  switch); absent = keyless server, no web tools. Resolved per call. */
+	search?: () => SearchProvider | null;
 	/** The prober's graph-map reader (wave 7): present = the two map tools
 	 *  (list_sessions / list_propositions) are registered. The composition
 	 *  root passes it only when graphToolsEnabled(effective) — the graph
@@ -335,6 +341,11 @@ export function createProberTools(
 				// remains available without a search-provider key.
 				...(jobs.research ? { research: jobs.research } : {}),
 				pdf: jobs.pdf!,
+				// Direct web tools (2026-11-12): the same web_search/web_fetch
+				// the researcher runs. tutorWebTools owns the settings `web`
+				// switch — filterEnabledTools keys are tool NAMES, and `web`
+				// names no tool. No search seam = keyless, no web tools.
+				...tutorWebTools(ctx.search, enabled),
 				// The map reader (wave 7): present only when the settings gate
 				// opened.
 				...(ctx.graphStore
@@ -401,6 +412,10 @@ export interface TeacherToolContext extends PlanToolContext {
 	spawn: (job: JobRecord, input: ResearchInput | DemoInput | VisualInput | PdfInput) => void;
 	/** Retained search-status seam; research dispatch is available keylessly. */
 	searchAvailable?: () => boolean;
+	/** Direct web tools (2026-11-12): the live search provider seam. Present
+	 *  = web_search/web_fetch are registered (behind the settings `web`
+	 *  switch); absent = keyless server, no web tools. Resolved per call. */
+	search?: () => SearchProvider | null;
 }
 
 /**
@@ -408,11 +423,11 @@ export interface TeacherToolContext extends PlanToolContext {
  * plan tools + job tools, all closing over the ctx.
  *
  * `enabled` is the resolved settings seam (core/pending.ts EnabledTools —
- * Platform's chat-handler wiring passes it through from settings). Today
- * only the sub-agent tools (research/demo/visual) are user-toggleable, but
- * the filtering is GENERIC: any name explicitly false is dropped, so
- * future toggleables (question-tool variants, …) need no change here.
- * Absent/undefined = enabled — tests and old records see today's set.
+ * Platform's chat-handler wiring passes it through from settings). The
+ * filter below handles the sub-agent tool NAMES (research/demo/visual/pdf);
+ * GENERIC, so any name explicitly false is dropped. The `web` switch is
+ * applied by tutorWebTools (below) because it names no tool. Absent/
+ * undefined = enabled — tests and old records see today's set.
  */
 /** The quizzing mechanics (owner 2026-09-27): `tools.explain === true` in
  *  the resolved settings ⇒ free-recall checks (explain armed, quiz dropped)
@@ -463,6 +478,10 @@ export function createTeacherTools(
 			show_image: createShowImageTool(ctx),
 			...planTools(ctx),
 			...jobTools({ chatId: ctx.chatId, jobStore: ctx.jobStore, spawn: ctx.spawn, searchAvailable: ctx.searchAvailable }),
+			// Direct web tools (2026-11-12): tutorWebTools owns the settings
+			// `web` switch (filterEnabledTools keys are tool NAMES, and `web`
+			// names no tool). No search seam = keyless, no web tools.
+			...tutorWebTools(ctx.search, enabled),
 		},
 		withoutMechanics(enabled),
 		),
