@@ -193,9 +193,11 @@ export function createWebTools(search: () => SearchProvider | null): Record<stri
 
 /**
  * The conversation tutors' web tools (direct web search, 2026-11-12): the
- * same tools the researcher runs, behind the settings `web` switch. No
- * seam (keyless server) or `web: false` → an empty registry. The provider
- * is still resolved per call by createWebTools.
+ * same tools the researcher runs, behind the settings `web` switch. An
+ * absent seam (not wired: tests, or a wiring bug) or `web: false` → an
+ * empty registry. The composition root always passes it; with no search
+ * key the provider resolves null per call, so both tools still register —
+ * web_fetch works and web_search reports search is not set up.
  */
 export function tutorWebTools(
 	search: (() => SearchProvider | null) | undefined,

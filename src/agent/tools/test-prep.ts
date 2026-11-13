@@ -55,7 +55,10 @@ export interface TestPrepToolContext {
 	jobs?: JobToolContext;
 	/** Direct web tools (2026-11-12): the live search provider seam. Present
 	 *  = web_search/web_fetch are registered (behind the settings `web`
-	 *  switch); absent = keyless server, no web tools. Resolved per call. */
+	 *  switch); absent = not wired (tests / wiring bug), no web tools. With no
+	 *  search key the composition root still passes it and the provider
+	 *  resolves null per call, so both tools register — web_fetch works,
+	 *  web_search reports search not set up. */
 	search?: () => SearchProvider | null;
 }
 
@@ -353,8 +356,9 @@ export function testPrepTools(ctx: TestPrepToolContext, enabled?: EnabledTools):
 		...(jobs?.research ? { research: jobs.research } : {}),
 		...(jobs ? { pdf: jobs.pdf! } : {}),
 		// Direct web tools (2026-11-12): the settings `web` switch is the
-		// only toggle this registry reads. No search seam = keyless, no
-		// web tools.
+		// only toggle this registry reads. Absent seam (not wired) = no web
+		// tools; with no search key both still register — the provider
+		// resolves null per call (web_fetch works, web_search says unset).
 		...tutorWebTools(ctx.search, enabled),
 	});
 }

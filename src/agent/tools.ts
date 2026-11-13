@@ -275,7 +275,10 @@ export interface ProberToolContext extends ProbeDoneContext {
 	searchAvailable?: () => boolean;
 	/** Direct web tools (2026-11-12): the live search provider seam. Present
 	 *  = web_search/web_fetch are registered (behind the settings `web`
-	 *  switch); absent = keyless server, no web tools. Resolved per call. */
+	 *  switch); absent = not wired (tests / wiring bug), no web tools. With no
+	 *  search key the composition root still passes it and the provider
+	 *  resolves null per call, so both tools register — web_fetch works,
+	 *  web_search reports search not set up. */
 	search?: () => SearchProvider | null;
 	/** The prober's graph-map reader (wave 7): present = the two map tools
 	 *  (list_sessions / list_propositions) are registered. The composition
@@ -344,7 +347,9 @@ export function createProberTools(
 				// Direct web tools (2026-11-12): the same web_search/web_fetch
 				// the researcher runs. tutorWebTools owns the settings `web`
 				// switch — filterEnabledTools keys are tool NAMES, and `web`
-				// names no tool. No search seam = keyless, no web tools.
+				// names no tool. Absent seam (not wired) = no web tools; with
+				// no search key both still register — the provider resolves
+				// null per call (web_fetch works, web_search says it is unset).
 				...tutorWebTools(ctx.search, enabled),
 				// The map reader (wave 7): present only when the settings gate
 				// opened.
@@ -414,7 +419,10 @@ export interface TeacherToolContext extends PlanToolContext {
 	searchAvailable?: () => boolean;
 	/** Direct web tools (2026-11-12): the live search provider seam. Present
 	 *  = web_search/web_fetch are registered (behind the settings `web`
-	 *  switch); absent = keyless server, no web tools. Resolved per call. */
+	 *  switch); absent = not wired (tests / wiring bug), no web tools. With no
+	 *  search key the composition root still passes it and the provider
+	 *  resolves null per call, so both tools register — web_fetch works,
+	 *  web_search reports search not set up. */
 	search?: () => SearchProvider | null;
 }
 
@@ -480,7 +488,9 @@ export function createTeacherTools(
 			...jobTools({ chatId: ctx.chatId, jobStore: ctx.jobStore, spawn: ctx.spawn, searchAvailable: ctx.searchAvailable }),
 			// Direct web tools (2026-11-12): tutorWebTools owns the settings
 			// `web` switch (filterEnabledTools keys are tool NAMES, and `web`
-			// names no tool). No search seam = keyless, no web tools.
+			// names no tool). Absent seam (not wired) = no web tools; with no
+			// search key both still register — the provider resolves null per
+			// call (web_fetch works, web_search says it is unset).
 			...tutorWebTools(ctx.search, enabled),
 		},
 		withoutMechanics(enabled),
