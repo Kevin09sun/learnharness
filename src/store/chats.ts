@@ -15,6 +15,7 @@ import { emit } from "../core/events.ts";
 import type { ChatStore } from "../core/ports.ts";
 import type { ChatRecord, ChatSettings, ChatSummary, ExtractionRunUsage, ImageSnapshot, PlanTree, TurnUsage } from "../core/contracts.ts";
 import { CURRENT_CHAT_VERSION } from "../core/contracts.ts";
+import type { ApSitting } from "../core/ap.ts";
 import type { LhMessage } from "../core/native-messages.ts";
 import { activeProblemOf, danglingQuestionOf } from "../core/native-messages.ts";
 import { phaseAt3Lh } from "../core/phases.ts";
@@ -34,7 +35,12 @@ function chatFile(id: string): string {
  *  phase, busy, pendingQuestion) is already announced by turn-started /
  *  turn-settled, which the sidebar refetches on. Silence here is law,
  *  not oversight. */
-function createChat(title: string, kind?: "practice" | "testprep", testId?: string): ChatRecord {
+function createChat(
+	title: string,
+	kind?: "practice" | "testprep" | "ap",
+	testId?: string,
+	ap?: { courseId: string; sitting?: ApSitting },
+): ChatRecord {
 	const now = new Date().toISOString();
 	const record: ChatRecord = {
 		id: `chat_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`,
@@ -47,6 +53,14 @@ function createChat(title: string, kind?: "practice" | "testprep", testId?: stri
 		...(kind === undefined ? {} : { kind }),
 		// Test prep links its test record; the other kinds carry no testId.
 		...(kind === "testprep" && testId !== undefined ? { testId } : {}),
+		// AP links its course record; a practice sitting also carries the
+		// sitting it asks about (the course's setup session carries none).
+		...(kind === "ap" && ap !== undefined
+			? {
+					apCourseId: ap.courseId,
+					...(ap.sitting === undefined ? {} : { apSitting: ap.sitting }),
+				}
+			: {}),
 	};
 	fs.mkdirSync(PATHS.chats, { recursive: true });
 	writeChat(record);

@@ -218,3 +218,43 @@ describe("test prep sessions (2026-11-10)", () => {
 		}
 	});
 });
+
+describe("ap sessions (2026-11-13)", () => {
+	it("createChat(kind: 'ap') stamps kind + apCourseId only — no sitting, no testId", () => {
+		const chat = chatStore.createChat("AP Calculus BC", "ap", undefined, { courseId: "ap_x" });
+		assert.equal(chat.kind, "ap");
+		assert.equal(chat.apCourseId, "ap_x");
+		assert.equal("apSitting" in chat, false, "a setup session carries no sitting");
+		assert.equal("testId" in chat, false, "an AP session never carries a testId");
+		const stored = chatStore.getChat(chat.id);
+		assert.equal(stored?.kind, "ap");
+		assert.equal(stored?.apCourseId, "ap_x");
+		assert.equal(stored === null ? false : "apSitting" in stored, false);
+	});
+
+	it("createChat(kind: 'ap') with a sitting stores it on the record and the list summary", () => {
+		const sitting = { scope: { type: "weak" as const }, kind: "mcq" as const };
+		const chat = chatStore.createChat("AP Biology", "ap", undefined, { courseId: "ap_y", sitting });
+		assert.deepEqual(chat.apSitting, sitting);
+		const stored = chatStore.getChat(chat.id);
+		assert.deepEqual(stored?.apSitting, sitting);
+		assert.equal(stored?.apCourseId, "ap_y");
+		const listed = chatStore.listChats().find((c) => c.id === chat.id);
+		assert.equal(listed?.kind, "ap");
+		assert.equal(listed?.apCourseId, "ap_y");
+		assert.deepEqual(listed?.apSitting, sitting);
+		assert.equal("testId" in listed!, false);
+	});
+
+	it("kinds other than ap never carry the AP fields", () => {
+		const teach = chatStore.createChat("teach");
+		const practice = chatStore.createChat("practice", "practice");
+		const testprep = chatStore.createChat("test prep", "testprep", "test_1");
+		// Even a caller that passes an AP link with another kind gets no fields.
+		const practiceWithLink = chatStore.createChat("practice linked", "practice", undefined, { courseId: "ap_z" });
+		for (const chat of [teach, practice, testprep, practiceWithLink]) {
+			assert.equal("apCourseId" in chat, false, chat.title);
+			assert.equal("apSitting" in chat, false, chat.title);
+		}
+	});
+});

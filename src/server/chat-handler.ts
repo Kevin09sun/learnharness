@@ -215,6 +215,12 @@ export async function handleChatInput(
 	if (record.kind === "testprep" && !record.testId) {
 		return Response.json({ error: "This test prep session is not linked to a test." }, { status: 500 });
 	}
+	// The AP twin: an AP session is defined by its linked course record. A
+	// record with no apCourseId would have the AP tools read an undefined id
+	// and every call fail obscurely downstream — refuse the turn up front.
+	if (record.kind === "ap" && !record.apCourseId) {
+		return Response.json({ error: "This AP session is not linked to a course." }, { status: 500 });
+	}
 
 	// Refuse an ineligible Retry before catalog refresh, compaction, or any
 	// turn/write effects. Revalidate after the awaited gates below too.
@@ -298,11 +304,12 @@ export async function handleChatInput(
 			engine: piEngineForSpec(conversation, true, undefined, retentionForSlot("strong")),
 			canStart: () => connectionBackgroundAllowed(conversation.provider),
 			modelId: modelIdForCompaction,
-			kind: record.kind === "practice" ? "practice" : record.kind === "testprep" ? "testprep" : hasProbeDone(record.messages) ? "teach" : "probe",
+			kind: record.kind === "practice" ? "practice" : record.kind === "testprep" ? "testprep" : record.kind === "ap" ? "ap" : hasProbeDone(record.messages) ? "teach" : "probe",
 			thresholdTokens: effectiveThresholdTokens(
 				effective.compaction?.thresholdTokens,
 				catalogContextLimits().get(modelIdForCompaction),
 			),
+			// ap: composeInstructions("ap") arrives with the AP agent
 			systemPromptTokens: Math.ceil(composeInstructions(record.kind === "practice" ? "practice" : record.kind === "testprep" ? "testprep" : "teacher").length / 4),
 		},
 		chatId,
@@ -704,11 +711,12 @@ export async function handleChatInput(
 							engine: kickEngine,
 							canStart: () => connectionBackgroundAllowed(spec.provider),
 							modelId: kickModelId,
-							kind: freshRecord.kind === "practice" ? "practice" : freshRecord.kind === "testprep" ? "testprep" : hasProbeDone(freshRecord.messages) ? "teach" : "probe",
+							kind: freshRecord.kind === "practice" ? "practice" : freshRecord.kind === "testprep" ? "testprep" : freshRecord.kind === "ap" ? "ap" : hasProbeDone(freshRecord.messages) ? "teach" : "probe",
 							thresholdTokens: effectiveThresholdTokens(
 								fresh.compaction?.thresholdTokens,
 								catalogContextLimits().get(kickModelId),
 							),
+							// ap: composeInstructions("ap") arrives with the AP agent
 							systemPromptTokens: Math.ceil(composeInstructions(freshRecord.kind === "practice" ? "practice" : freshRecord.kind === "testprep" ? "testprep" : "teacher").length / 4),
 						};
 					}, chatId);

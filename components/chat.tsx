@@ -62,7 +62,7 @@ import { PracticeDock } from "@/components/practice-dock";
 import { ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
 import { GraphContextCard, type GraphContextData } from "@/components/graph-context-card";
 import { TopBar } from "@/components/top-bar";
-import type { ArtifactPartProps, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TokenTotals, TurnUsage, SessionPricing } from "@/src/core";
+import type { ArtifactPartProps, ChatKind, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TokenTotals, TurnUsage, SessionPricing } from "@/src/core";
 import type { LhViewMessage } from "@/src/core";
 import { PhaseChip, PhaseDivider } from "@/components/phase-divider";
 import {
@@ -237,8 +237,10 @@ export function Chat({
 	/** The session kind (practice sessions, owner 2026-10-04): practice
 	 *  renders no phase chip (no probe→teach arc applies) and a Practice
 	 *  tag rides the header instead. Test prep (2026-11-10) renders
-	 *  teach-like and links its header back to the test's readiness page. */
-	kind?: "teach" | "practice" | "testprep";
+	 *  teach-like and links its header back to the test's readiness page.
+	 *  AP (2026-11-13) rides this seam too; its header/behaviour lands with
+	 *  the AP client work (before then it renders teach-like). */
+	kind?: ChatKind;
 	/** The linked test record (testprep only) — the readiness link target. */
 	testId?: string;
 	initialPrompt?: string;

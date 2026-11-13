@@ -1742,3 +1742,20 @@ describe("duplicate provider tool-call ids (the Lacan fix)", () => {
 		assert.equal(quizPart?.output?.kind, "quiz", "the quiz card got ITS answer (the pre-fix bug: it landed on the ask card)");
 	});
 });
+
+describe("session-kind turn guards", () => {
+	it("refuses an ap session that is not linked to a course (500, before any turn effects)", async () => {
+		// A corrupt or hand-edited record: kind "ap" with no apCourseId. The
+		// guard runs before the model gates and before beginTurn.
+		const chat = chatStore.createChat("AP with no course", "ap");
+		createdChats.push(chat.id);
+
+		const res = await handleChatInput(chat.id, { type: "text", text: "hi" });
+		assert.equal(res.status, 500);
+		assert.equal(
+			((await res.json()) as { error: string }).error,
+			"This AP session is not linked to a course.",
+		);
+		assert.equal(isTurnRunning(chat.id), false, "the refusal never registered a turn");
+	});
+});

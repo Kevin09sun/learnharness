@@ -1,4 +1,4 @@
-import { chainsForSelection, formatChainLine } from "@/src/core";
+import { chainsForSelection, formatChainLine, parseApSitting, sittingScopeProblem, type ApSitting } from "@/src/core";
 import { newGraphContextMessage, type GraphContextPick } from "@/src/core";
 import { chatTokens, compactionInFlight, createChat, isTurnRunning, listChats, readSettingsRecord, stores, titleFromPrompt } from "@/src/server";
 import type { ChatListItem } from "@/src/core";
@@ -30,6 +30,9 @@ export async function POST(req: Request) {
 		graphContext?: unknown;
 		testTitle?: unknown;
 		testId?: unknown;
+		apCourseTitle?: unknown;
+		apCourseId?: unknown;
+		apSitting?: unknown;
 	};
 	const title = typeof body.title === "string" ? body.title : "";
 	// Practice sessions (owner, 2026-10-04): kind "practice" marks the
@@ -51,8 +54,45 @@ export async function POST(req: Request) {
 			testId = stores.testStore.create(testTitle).id;
 		}
 	}
-	const kind = body.kind === "practice" ? ("practice" as const) : body.kind === "testprep" ? ("testprep" as const) : undefined;
-	const chat = createChat(titleFromPrompt(title || "Untitled session"), kind, testId);
+	// AP sessions (2026-11-13) name exactly one course: a new one by title
+	// (the course's setup session — no sitting) or an existing one by id
+	// (optionally with the sitting it asks about). Validate in that order and
+	// create the course record only after every check passes.
+	let ap: { courseId: string; sitting?: ApSitting } | undefined;
+	if (body.kind === "ap") {
+		const apCourseTitle = typeof body.apCourseTitle === "string" ? body.apCourseTitle.trim() : "";
+		const requestedApCourseId = typeof body.apCourseId === "string" ? body.apCourseId.trim() : "";
+		if ((apCourseTitle !== "") === (requestedApCourseId !== "")) {
+			return Response.json({ error: "An AP session names a new course by title or an existing course by id." }, { status: 400 });
+		}
+		if (requestedApCourseId !== "") {
+			const course = stores.apCourseStore.get(requestedApCourseId);
+			if (!course) return Response.json({ error: "Unknown AP course" }, { status: 404 });
+			if (body.apSitting !== undefined) {
+				const sitting = parseApSitting(body.apSitting);
+				if (!sitting) return Response.json({ error: "Invalid AP sitting." }, { status: 400 });
+				const problem = sittingScopeProblem(course, sitting.scope);
+				if (problem !== null) return Response.json({ error: problem }, { status: 400 });
+				ap = { courseId: course.id, sitting };
+			} else {
+				ap = { courseId: course.id };
+			}
+		} else {
+			if (body.apSitting !== undefined) {
+				return Response.json({ error: "A new course starts with its setup session." }, { status: 400 });
+			}
+			ap = { courseId: stores.apCourseStore.create(apCourseTitle).id };
+		}
+	}
+	const kind =
+		body.kind === "practice"
+			? ("practice" as const)
+			: body.kind === "testprep"
+				? ("testprep" as const)
+				: body.kind === "ap"
+					? ("ap" as const)
+					: undefined;
+	const chat = createChat(titleFromPrompt(title || "Untitled session"), kind, testId, ap);
 	// PER-SESSION MODELS (owner, 2026-09-28): a session owns its model +
 	// thinking level from birth — stamped verbatim from the STRONG slot,
 	// the new-session default. From here the strong slot never reaches
