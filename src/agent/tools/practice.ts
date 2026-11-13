@@ -17,12 +17,15 @@
 import { Type, type Static } from "typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { resolveTargetId } from "../../core/chains.ts";
+import type { SearchProvider } from "../../core/search.ts";
+import type { EnabledTools } from "../../core/pending.ts";
 import { readTool } from "./read.ts";
 import { lsTool } from "./ls.ts";
 import { findTool } from "./find.ts";
 import { grepTool } from "./grep.ts";
 import { jobTools, type JobToolContext } from "./jobs.ts";
 import { proberGraphTools, type GraphToolContext } from "./graph.ts";
+import { tutorWebTools } from "./web.ts";
 import { activeProblemOf } from "../../core/native-messages.ts";
 import type { LhMessage } from "../../core/native-messages.ts";
 import { concludeResult, invalidInputResult, problemResult } from "../tool-execute.ts";
@@ -44,6 +47,10 @@ export interface PracticeToolContext {
 	 *  Each absent context (tests) = absent from the registry. */
 	graph?: GraphToolContext;
 	jobs?: JobToolContext;
+	/** Direct web tools (2026-11-12): the live search provider seam. Present
+	 *  = web_search/web_fetch are registered (behind the settings `web`
+	 *  switch); absent = keyless server, no web tools. Resolved per call. */
+	search?: () => SearchProvider | null;
 }
 
 /** TURN-SCOPED GATE STATE (the BKT incident, 2026-10-05): the gates used
@@ -220,7 +227,7 @@ export function concludeTool(gate: PracticeGate): AgentTool<typeof concludeInput
 }
 
 /** The practice toolset (the practice agent's whole registry). */
-export function practiceTools(ctx: PracticeToolContext): Record<string, AgentTool<any>> {
+export function practiceTools(ctx: PracticeToolContext, enabled?: EnabledTools): Record<string, AgentTool<any>> {
 	// ONE gate per turn, shared by both tools — the intra-turn truth.
 	const gate = createPracticeGate(ctx);
 	// THE RARELY-NEEDED SET (owner round 10): read/ls/find/grep over the
@@ -228,7 +235,8 @@ export function practiceTools(ctx: PracticeToolContext): Record<string, AgentToo
 	// prober carry), the research + pdf jobs (available without search
 	// keys; demo/visual stay teach-only), and
 	// the prober's map readers when the settings gate opened. None are
-	// toggle-filtered: problem/conclude are the session; these are
+	// toggle-filtered — the settings `web` switch (tutorWebTools, below)
+	// is the one exception; problem/conclude are the session; these are
 	// exceptions the doctrine says to reach for rarely.
 	const jobs = ctx.jobs ? jobTools(ctx.jobs) : null;
 	// healToolRecord (owner, 2026-10-09 — the whitehead generalization):
@@ -245,5 +253,9 @@ export function practiceTools(ctx: PracticeToolContext): Record<string, AgentToo
 		...(jobs?.research ? { research: jobs.research } : {}),
 		...(jobs ? { pdf: jobs.pdf! } : {}),
 		...(ctx.graph ? proberGraphTools(ctx.graph) : {}),
+		// Direct web tools (2026-11-12): the settings `web` switch is the
+		// only toggle this registry reads. No search seam = keyless, no
+		// web tools.
+		...tutorWebTools(ctx.search, enabled),
 	});
 }

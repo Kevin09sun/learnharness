@@ -22,6 +22,8 @@ import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import { explainInputBase, explainInputProblems } from "../../core/question-core.ts";
 import { nextQueue, planProblems, readiness, readinessPercent } from "../../core/test-prep.ts";
 import type { AnswerResult, PlanDraftSection, TestRecord } from "../../core/test-prep.ts";
+import type { SearchProvider } from "../../core/search.ts";
+import type { EnabledTools } from "../../core/pending.ts";
 import { invalidInputResult, questionResult } from "../tool-execute.ts";
 import { healEncodedArguments, healToolRecord } from "./heal.ts";
 import { readTool } from "./read.ts";
@@ -29,6 +31,7 @@ import { lsTool } from "./ls.ts";
 import { findTool } from "./find.ts";
 import { grepTool } from "./grep.ts";
 import { jobTools, type JobToolContext } from "./jobs.ts";
+import { tutorWebTools } from "./web.ts";
 
 /** The storage port this toolset closes over — the three test-record
  *  operations it needs, structurally satisfied by store/tests.ts. The agent
@@ -50,6 +53,10 @@ export interface TestPrepToolContext {
 	 *  slides are usually PDFs, so the pdf job matters here. Absent (tests,
 	 *  wiring bugs) = absent from the registry. */
 	jobs?: JobToolContext;
+	/** Direct web tools (2026-11-12): the live search provider seam. Present
+	 *  = web_search/web_fetch are registered (behind the settings `web`
+	 *  switch); absent = keyless server, no web tools. Resolved per call. */
+	search?: () => SearchProvider | null;
 }
 
 /** Plain-text result (these tools answer the model in prose, not JSON). */
@@ -325,7 +332,7 @@ function recordResultTool(ctx: TestPrepToolContext): AgentTool<typeof recordResu
 // ─── the registry ───────────────────────────────────────────────────────────
 
 /** The test-prep toolset (the test-prep agent's whole registry). */
-export function testPrepTools(ctx: TestPrepToolContext): Record<string, AgentTool<any>> {
+export function testPrepTools(ctx: TestPrepToolContext, enabled?: EnabledTools): Record<string, AgentTool<any>> {
 	// THE RARELY-NEEDED SET (the practice-tools idiom): the research + pdf
 	// jobs (demo/visual stay teach-only), absent when no jobs context was
 	// injected. Outlines and slides are usually PDFs, so the pdf job is how
@@ -345,5 +352,9 @@ export function testPrepTools(ctx: TestPrepToolContext): Record<string, AgentToo
 		grep: grepTool,
 		...(jobs?.research ? { research: jobs.research } : {}),
 		...(jobs ? { pdf: jobs.pdf! } : {}),
+		// Direct web tools (2026-11-12): the settings `web` switch is the
+		// only toggle this registry reads. No search seam = keyless, no
+		// web tools.
+		...tutorWebTools(ctx.search, enabled),
 	});
 }

@@ -12,10 +12,12 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { createFauxCore } from "@earendil-works/pi-ai";
 
 import { applyResult } from "../src/core/test-prep.ts";
 import type { AnswerResult, PlanDraftSection, PointStatus, TestRecord } from "../src/core/test-prep.ts";
 import { QUESTION_TOOLS, toolQuestionKind } from "../src/core/pending.ts";
+import { createTestPrepAgent } from "../src/agent/teacher-agent.ts";
 import {
 	checkPointInputObject,
 	testPrepTools,
@@ -121,6 +123,12 @@ function ctxOf(tests: TestPrepToolContext["tests"]): TestPrepToolContext {
 	return { chatId: "chat_now", testId: "test_1", tests };
 }
 
+/** A scripted pi engine — the agent factories need one injected (BYOK). */
+function fauxEngine() {
+	const faux = createFauxCore({});
+	return { model: faux.getModel(), streamFn: faux.streamSimple };
+}
+
 const CHECK_INPUT = {
 	pointId: "p_unchecked",
 	question: "What are the stages of mitosis, in order?",
@@ -179,6 +187,36 @@ describe("testPrepTools registry", () => {
 	it("check_point is a question tool: it folds onto the explain kind (the turn pauses)", () => {
 		assert.ok((QUESTION_TOOLS as readonly string[]).includes("check_point"));
 		assert.equal(toolQuestionKind("check_point"), "explain");
+	});
+});
+
+// ── direct web tools (2026-11-12) ───────────────────────────────────────────
+
+describe("direct web tools", () => {
+	const ctx = ctxOf(fakeTests(recordOf()).tests);
+
+	it("search seam → both web tools; web:false → neither; nothing else is filtered", () => {
+		const on = testPrepTools({ ...ctx, search: () => null });
+		assert.ok(on.web_search && on.web_fetch);
+		const off = testPrepTools({ ...ctx, search: () => null }, { web: false, research: false, pdf: false });
+		assert.equal(off.web_search, undefined);
+		assert.equal(off.web_fetch, undefined);
+		assert.deepEqual(
+			Object.keys(off).sort(),
+			Object.keys(testPrepTools(ctx)).sort(),
+			"research:false and pdf:false are ignored here, as before",
+		);
+	});
+
+	it("no search seam → no web tools", () => {
+		const tools = testPrepTools(ctx);
+		assert.equal(tools.web_search, undefined);
+	});
+
+	it("the factory forwards the web switch", () => {
+		const agent = createTestPrepAgent({ ...ctx, search: () => null }, { engine: fauxEngine(), toolToggles: { web: false } });
+		const names = agent.state.tools.map((tool) => tool.name);
+		assert.ok(!names.includes("web_search") && !names.includes("web_fetch"));
 	});
 });
 

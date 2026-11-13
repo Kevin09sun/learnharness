@@ -10,6 +10,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { createFauxCore } from "@earendil-works/pi-ai";
 import type { AssistantMessage, ToolResultMessage } from "@earendil-works/pi-ai";
 
 import {
@@ -73,6 +74,12 @@ function recordStore(messages: LhMessage[]) {
 }
 
 const ctxOf = (messages: LhMessage[]) => ({ chatId: "c1", chatStore: recordStore(messages).store });
+
+/** A scripted pi engine — the agent factories need one injected (BYOK). */
+function fauxEngine() {
+	const faux = createFauxCore({});
+	return { model: faux.getModel(), streamFn: faux.streamSimple };
+}
 const PROBLEM_INPUT = {
 	statement: "Prove the sum is even.",
 	mode: "recall",
@@ -235,6 +242,36 @@ describe("the practice agent", () => {
 		assert.equal(typeof agent.prompt, "function");
 		assert.equal(typeof agent.steer, "function");
 		assert.equal(typeof agent.waitForIdle, "function");
+	});
+});
+
+// ── direct web tools (2026-11-12) ───────────────────────────────────────────
+
+describe("direct web tools", () => {
+	const ctx = ctxOf([]);
+
+	it("search seam → both web tools; web:false → neither; nothing else is filtered", () => {
+		const on = practiceTools({ ...ctx, search: () => null });
+		assert.ok(on.web_search && on.web_fetch);
+		const off = practiceTools({ ...ctx, search: () => null }, { web: false, research: false, pdf: false });
+		assert.equal(off.web_search, undefined);
+		assert.equal(off.web_fetch, undefined);
+		assert.deepEqual(
+			Object.keys(off).sort(),
+			Object.keys(practiceTools(ctx)).sort(),
+			"research:false and pdf:false are ignored here, as before",
+		);
+	});
+
+	it("no search seam → no web tools", () => {
+		const tools = practiceTools(ctx);
+		assert.equal(tools.web_search, undefined);
+	});
+
+	it("the factory forwards the web switch", () => {
+		const agent = createPracticeAgent({ ...ctx, search: () => null }, { engine: fauxEngine(), toolToggles: { web: false } });
+		const names = agent.state.tools.map((tool) => tool.name);
+		assert.ok(!names.includes("web_search") && !names.includes("web_fetch"));
 	});
 });
 
