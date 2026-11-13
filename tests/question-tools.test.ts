@@ -253,13 +253,15 @@ describe("quiz tool descriptions carry the complete, phase-correct example", () 
 // ─── tool availability (2026-09 settings seam) ───────────────────────────────
 
 describe("tool toggles (core/pending.ts + factories)", () => {
-	it("TOGGLEABLE_TOOLS: the sub-agent dispatch tools; quiz/ask/read stay off the list", () => {
+	it("TOGGLEABLE_TOOLS: the job tools plus web; quiz/ask/read stay off the list", () => {
 		// THE DEFINITIVE vocabulary (adjudicated with the user 2026-09-19, P2
-		// reconciliation): the job tools only. quiz/ask_user_question are
-		// permanently always-on (the prober's assessment + teaching doctrine
-		// are built on graded questions — the wedge danger), as are the
-		// learner-fs set, plan tools, and probe_done. The settings WRITE side
-		// validates against this list (settings-body).
+		// reconciliation): the job tools, plus `web` (2026-11-12), which
+		// governs the tutors' direct web_search and web_fetch together.
+		// quiz/ask_user_question are permanently always-on (the prober's
+		// assessment + teaching doctrine are built on graded questions — the
+		// wedge danger), as are the learner-fs set, plan tools, and
+		// probe_done. The settings WRITE side validates against this list
+		// (settings-body).
 		assert.deepEqual(TOGGLEABLE_TOOLS, ["research", "demo", "visual", "pdf", "web"]);
 	});
 
