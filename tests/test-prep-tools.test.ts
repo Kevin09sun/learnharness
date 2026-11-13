@@ -129,6 +129,9 @@ function fauxEngine() {
 	return { model: faux.getModel(), streamFn: faux.streamSimple };
 }
 
+/** The job context fixture: both jobs available keylessly. */
+const JOBS = { chatId: "chat_now", jobStore: null as never, spawn: (() => {}) as never, searchAvailable: () => false };
+
 const CHECK_INPUT = {
 	pointId: "p_unchecked",
 	question: "What are the stages of mitosis, in order?",
@@ -178,8 +181,7 @@ describe("testPrepTools registry", () => {
 		// agent could not read the folder it was pointed at.
 		const plain = testPrepTools(ctxOf(fakeTests(recordOf()).tests));
 		assert.equal(plain.pdf, undefined);
-		const jobs = { chatId: "chat_now", jobStore: null as never, spawn: (() => {}) as never, searchAvailable: () => false };
-		const withJobs = testPrepTools({ ...ctxOf(fakeTests(recordOf()).tests), jobs });
+		const withJobs = testPrepTools({ ...ctxOf(fakeTests(recordOf()).tests), jobs: JOBS });
 		assert.ok(withJobs.pdf, "pdf job present with a jobs context");
 		assert.ok(withJobs.research, "the same job set practice carries");
 	});
@@ -193,7 +195,7 @@ describe("testPrepTools registry", () => {
 // ── direct web tools (2026-11-12) ───────────────────────────────────────────
 
 describe("direct web tools", () => {
-	const ctx = ctxOf(fakeTests(recordOf()).tests);
+	const ctx = { ...ctxOf(fakeTests(recordOf()).tests), jobs: JOBS };
 
 	it("search seam → both web tools; web:false → neither; nothing else is filtered", () => {
 		const on = testPrepTools({ ...ctx, search: () => null });
@@ -201,6 +203,8 @@ describe("direct web tools", () => {
 		const off = testPrepTools({ ...ctx, search: () => null }, { web: false, research: false, pdf: false });
 		assert.equal(off.web_search, undefined);
 		assert.equal(off.web_fetch, undefined);
+		assert.ok(off.research, "research:false is ignored here, as before");
+		assert.ok(off.pdf, "pdf:false is ignored here, as before");
 		assert.deepEqual(
 			Object.keys(off).sort(),
 			Object.keys(testPrepTools(ctx)).sort(),
@@ -211,12 +215,16 @@ describe("direct web tools", () => {
 	it("no search seam → no web tools", () => {
 		const tools = testPrepTools(ctx);
 		assert.equal(tools.web_search, undefined);
+		assert.equal(tools.web_fetch, undefined);
 	});
 
 	it("the factory forwards the web switch", () => {
-		const agent = createTestPrepAgent({ ...ctx, search: () => null }, { engine: fauxEngine(), toolToggles: { web: false } });
-		const names = agent.state.tools.map((tool) => tool.name);
-		assert.ok(!names.includes("web_search") && !names.includes("web_fetch"));
+		const on = createTestPrepAgent({ ...ctx, search: () => null }, { engine: fauxEngine() });
+		const onNames = on.state.tools.map((tool) => tool.name);
+		assert.ok(onNames.includes("web_search") && onNames.includes("web_fetch"), "the search seam reaches the registry");
+		const off = createTestPrepAgent({ ...ctx, search: () => null }, { engine: fauxEngine(), toolToggles: { web: false } });
+		const offNames = off.state.tools.map((tool) => tool.name);
+		assert.ok(!offNames.includes("web_search") && !offNames.includes("web_fetch"));
 	});
 });
 

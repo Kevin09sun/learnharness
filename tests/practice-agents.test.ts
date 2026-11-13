@@ -80,6 +80,9 @@ function fauxEngine() {
 	const faux = createFauxCore({});
 	return { model: faux.getModel(), streamFn: faux.streamSimple };
 }
+
+/** The job context fixture: both jobs available keylessly. */
+const JOBS = { chatId: "c1", jobStore: null as never, spawn: (() => {}) as never, searchAvailable: () => false };
 const PROBLEM_INPUT = {
 	statement: "Prove the sum is even.",
 	mode: "recall",
@@ -212,9 +215,8 @@ describe("the practice agent", () => {
 	});
 
 	it("THE RARELY-NEEDED SET (owner round 10): jobs + map readers compose in when their roots are passed", () => {
-		const jobs = { chatId: "c1", jobStore: null as never, spawn: (() => {}) as never, searchAvailable: () => false };
 		const graph = { chatStore: null as never, graphStore: null as never };
-		const tools = practiceTools({ ...ctxOf([]), jobs, graph });
+		const tools = practiceTools({ ...ctxOf([]), jobs: JOBS, graph });
 		// Both jobs remain available keylessly; the prober's two map
 		// readers stay behind their existing settings gate. Practice does
 		// not apply the teacher/prober user tool-toggle filter.
@@ -222,7 +224,7 @@ describe("the practice agent", () => {
 			Object.keys(tools).sort(),
 			["conclude", "find", "grep", "list_propositions", "list_sessions", "ls", "pdf", "problem", "read", "research"],
 		);
-		const withSearch = practiceTools({ ...ctxOf([]), jobs: { ...jobs, searchAvailable: () => true }, graph });
+		const withSearch = practiceTools({ ...ctxOf([]), jobs: { ...JOBS, searchAvailable: () => true }, graph });
 		assert.ok(withSearch.research, "a live engine also keeps research");
 	});
 
@@ -248,7 +250,7 @@ describe("the practice agent", () => {
 // ── direct web tools (2026-11-12) ───────────────────────────────────────────
 
 describe("direct web tools", () => {
-	const ctx = ctxOf([]);
+	const ctx = { ...ctxOf([]), jobs: JOBS };
 
 	it("search seam → both web tools; web:false → neither; nothing else is filtered", () => {
 		const on = practiceTools({ ...ctx, search: () => null });
@@ -256,6 +258,8 @@ describe("direct web tools", () => {
 		const off = practiceTools({ ...ctx, search: () => null }, { web: false, research: false, pdf: false });
 		assert.equal(off.web_search, undefined);
 		assert.equal(off.web_fetch, undefined);
+		assert.ok(off.research, "research:false is ignored here, as before");
+		assert.ok(off.pdf, "pdf:false is ignored here, as before");
 		assert.deepEqual(
 			Object.keys(off).sort(),
 			Object.keys(practiceTools(ctx)).sort(),
@@ -266,12 +270,16 @@ describe("direct web tools", () => {
 	it("no search seam → no web tools", () => {
 		const tools = practiceTools(ctx);
 		assert.equal(tools.web_search, undefined);
+		assert.equal(tools.web_fetch, undefined);
 	});
 
 	it("the factory forwards the web switch", () => {
-		const agent = createPracticeAgent({ ...ctx, search: () => null }, { engine: fauxEngine(), toolToggles: { web: false } });
-		const names = agent.state.tools.map((tool) => tool.name);
-		assert.ok(!names.includes("web_search") && !names.includes("web_fetch"));
+		const on = createPracticeAgent({ ...ctx, search: () => null }, { engine: fauxEngine() });
+		const onNames = on.state.tools.map((tool) => tool.name);
+		assert.ok(onNames.includes("web_search") && onNames.includes("web_fetch"), "the search seam reaches the registry");
+		const off = createPracticeAgent({ ...ctx, search: () => null }, { engine: fauxEngine(), toolToggles: { web: false } });
+		const offNames = off.state.tools.map((tool) => tool.name);
+		assert.ok(!offNames.includes("web_search") && !offNames.includes("web_fetch"));
 	});
 });
 
