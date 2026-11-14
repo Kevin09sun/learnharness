@@ -34,6 +34,7 @@ import { artifactRenderers } from "../components/artifacts/index.ts";
 import { ToolCallCard } from "../components/artifacts/tool-call-card.tsx";
 import { toolActivityLabel } from "../src/core/pending.ts";
 import { sittingLabel } from "../src/core/index.ts";
+import { AP_ADDED_TOPIC_SOURCE } from "../src/core/ap.ts";
 import type { ApCourseRecord, ApDocument, LhViewMessage } from "../src/core/index.ts";
 
 const dom = parseHTML("<html><body></body></html>");
@@ -200,6 +201,18 @@ test("learnPrompt: unit and topic, with and without the course description", () 
 	assert.equal(
 		learnPrompt({ ...topic, cedPath: "/papers/ced.pdf", source: "p. 5" }),
 		"Teach me 1.1 Average rates of change (Unit 1 Limits) from AP Calculus BC, to the AP syllabus. The official course description is `/papers/ced.pdf`. This part is at p. 5.",
+	);
+
+	assert.equal(
+		learnPrompt({ ...topic, cedPath: "/papers/ced.pdf", source: AP_ADDED_TOPIC_SOURCE }),
+		"Teach me 1.1 Average rates of change (Unit 1 Limits) from AP Calculus BC, to the AP syllabus. The official course description is `/papers/ced.pdf`.",
+		"a learner-added topic names no page — 'Added by you' is not a location",
+	);
+
+	assert.equal(
+		learnPrompt({ ...topic, cedPath: "/papers/ced.pdf", source: "  " }),
+		"Teach me 1.1 Average rates of change (Unit 1 Limits) from AP Calculus BC, to the AP syllabus. The official course description is `/papers/ced.pdf`.",
+		"an empty source adds no page sentence",
 	);
 });
 

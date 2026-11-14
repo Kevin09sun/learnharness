@@ -1,6 +1,7 @@
 "use client";
 
 import type { ArtifactPartProps } from "@/src/core";
+import { fillAddedTopicSources } from "@/src/core";
 import {
 	PlanReviewCard,
 	type PlanReviewConfig,
@@ -34,6 +35,7 @@ export const AP_PLAN_CONFIG: PlanReviewConfig = {
 	confirmMessage: "I've confirmed the units and topics.",
 	instruction:
 		"Check every topic against your course description — each one shows the page it came from. Edit anything that is off, then confirm.",
+	prepareDraft: fillAddedTopicSources,
 };
 
 export function UnitsReviewCard({ part }: ArtifactPartProps) {

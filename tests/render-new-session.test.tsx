@@ -279,6 +279,15 @@ describe("the AP draft (?mode=ap, 2026-11-13)", () => {
 		assert.match(html, /Which AP course\? e\.g\. AP Calculus BC/);
 		assert.ok(!html.includes('data-testid="test-name"'));
 	});
+
+	it("AP starts by name only: no attach control and the name-only sentence", () => {
+		const html = renderToStaticMarkup(
+			<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} mode="ap" />,
+		);
+		assert.ok(!html.includes('data-testid="attach-files"'), "no attach control in AP mode");
+		assert.ok(html.includes("Name the AP course you want to prepare for."));
+		assert.ok(!html.includes("attach the folder"));
+	});
 });
 
 describe("the test prep draft (?mode=testprep, 2026-11-10)", () => {
@@ -318,5 +327,12 @@ describe("the test prep draft (?mode=testprep, 2026-11-10)", () => {
 		assert.match(html, /New test prep session/);
 		assert.match(html, /Test name/);
 		assert.ok(html.includes("Attach the folder with your outline or slides"));
+		assert.ok(html.includes('data-testid="attach-files"'), "Test prep keeps its attach control");
+		assert.ok(
+			html.includes(
+				"Name the test and attach the folder with its outline or slides. The agent will propose a plan for you to review.",
+			),
+			"Test prep keeps its own sentence",
+		);
 	});
 });

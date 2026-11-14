@@ -9,6 +9,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+	AP_ADDED_TOPIC_SOURCE,
+	fillAddedTopicSources,
 	isCollegeBoardUrl,
 	parseApSitting,
 	scopedQueue,
@@ -17,7 +19,7 @@ import {
 	topicInScope,
 	type ApCourseRecord,
 } from "../src/core/ap.ts";
-import { nextQueue, type PointStatus } from "../src/core/test-prep.ts";
+import { nextQueue, type PlanDraftSection, type PointStatus } from "../src/core/test-prep.ts";
 
 const course: ApCourseRecord = {
 	id: "apcalc",
@@ -124,5 +126,37 @@ describe("AP core", () => {
 		assert.equal(sittingLabel(course, { scope: { type: "unit", unitId: "u1" }, kind: "mcq" }), "AP Calculus BC · Unit 1 Limits · multiple-choice");
 		assert.equal(sittingLabel(course, { scope: { type: "weak" }, kind: "mixed" }), "AP Calculus BC · weak topics · mixed");
 		assert.equal(sittingLabel(course, { scope: { type: "topic", topicId: "t11" }, kind: "frq" }), "AP Calculus BC · 1.1 Limits intro · free-response");
+	});
+});
+
+describe("fillAddedTopicSources — a learner-added topic gets a fixed source", () => {
+	it("fills a new topic's blank source, keeps a supplied source, and never alters a topic with an id", () => {
+		const draft: PlanDraftSection[] = [
+			{
+				id: "u1",
+				title: "Unit 1 Limits",
+				points: [
+					{ id: "t1", text: "Existing topic", source: "p. 5" },
+					{ id: "t2", text: "Existing topic with a blank source", source: "" },
+					{ text: "Added topic", source: "" },
+					{ text: "Added topic with whitespace", source: "   " },
+					{ text: "Added topic with a source", source: "p. 9" },
+				],
+			},
+		];
+
+		const filled = fillAddedTopicSources(draft);
+		const points = filled[0]!.points;
+
+		assert.equal(points[0]!.source, "p. 5", "an existing topic keeps its source");
+		assert.equal(points[1]!.source, "", "an existing topic is never altered, even with a blank source");
+		assert.equal(points[2]!.source, AP_ADDED_TOPIC_SOURCE, "a new topic with no source gets the fixed source");
+		assert.equal(points[3]!.source, AP_ADDED_TOPIC_SOURCE, "whitespace counts as no source");
+		assert.equal(points[4]!.source, "p. 9", "a new topic with a source keeps it");
+		assert.deepEqual(points[0], { id: "t1", text: "Existing topic", source: "p. 5" });
+		assert.equal(points[2]!.id, undefined, "a new topic stays new");
+
+		assert.deepEqual(draft[0]!.points[2], { text: "Added topic", source: "" }, "the input draft is not mutated");
+		assert.notEqual(filled, draft, "the result is a copy");
 	});
 });

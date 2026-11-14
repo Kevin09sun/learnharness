@@ -1,17 +1,17 @@
 # AP prep mode
 
-AP prep is the fourth session type, alongside Teach, Practice and Test prep. It is built around a named AP course: the agent builds the course's units and official topics from College Board's Course and Exam Description, teaches any topic with the ordinary Teach mode, asks newly written multiple-choice questions, and tracks how ready you are per topic and unit across sittings.
+AP prep is the fourth session type, alongside Teach, Practice and Test prep. It is built around a named AP course: the agent builds the course's units and official topics from College Board's Course and Exam Description, teaches any topic with the ordinary Teach mode, asks newly written multiple-choice questions, and tracks readiness per unit and course with a status per topic across sittings.
 
 Use it when you are preparing for an AP exam and want practice that judges your reasoning, not only your final answer.
 
 ## Add a course
 
 1. Choose **AP** where you choose Teach, Practice or Test prep.
-2. Type the course name (for example, "AP Calculus BC") and send it.
+2. Type the course name (for example, "AP Calculus BC") and send it. Starting a course asks for the name only — there is nothing to attach yet.
 
-The agent finds the course's current official Course and Exam Description on a College Board site, saves it to this computer, and reads it. It then proposes the course's units, each holding the official numbered topics it covers. Every topic shows the course-description page it came from, in smaller text under it, so you can audit coverage.
+The agent finds the course's current official Course and Exam Description on a College Board site, saves it to this computer, and reads it a few pages at a time. It then proposes the course's units, each holding the official numbered topics it covers. Every topic shows the course-description page it came from, in smaller text under it, so you can audit coverage.
 
-If the agent finds the wrong document, or cannot find one, say so. You can paste a College Board link or attach the PDF yourself, and the agent works from that instead. It never builds the list from general knowledge or from a site that is not College Board's.
+If the agent finds the wrong document, or cannot find one, say so in the setup chat. You can paste a College Board link or attach the PDF there, and the agent works from that instead. It never builds the list from general knowledge or from a site that is not College Board's.
 
 ## Confirm the units and topics
 
@@ -22,6 +22,8 @@ The proposed list appears as a card in the conversation. In the card you can:
 - add topics to a unit, or add a new unit.
 
 Then choose **Confirm units and topics**. Confirming saves the list and the card collapses to a summary with a link to the course page. Nothing can be practised until the list is confirmed.
+
+A topic you add yourself has no page in the course description. It is saved with the source **Added by you**, and Learn teaches it without a page reference.
 
 ## The course page
 

@@ -10,7 +10,7 @@ import { SidebarToggle } from "@/components/sidebar";
 import { SessionStarter } from "@/components/start-session";
 import { PlanEditor } from "@/components/test-prep/plan-editor";
 import { Button } from "@/components/ui/button";
-import { quoteFilePath, readiness, readinessPercent } from "@/src/core";
+import { AP_ADDED_TOPIC_SOURCE, fillAddedTopicSources, quoteFilePath, readiness, readinessPercent } from "@/src/core";
 import type { ApCourseRecord, ApDocument, ApSittingScope, PlanDraftSection, PointStatus } from "@/src/core";
 
 /**
@@ -65,7 +65,10 @@ export function learnPrompt(input: {
 			" The official course description is not on this computer; teach from your own knowledge of the AP syllabus and say so.";
 	} else {
 		prompt += ` The official course description is ${quoteFilePath(input.cedPath)}.`;
-		if (input.source !== undefined) prompt += ` This part is at ${input.source}.`;
+		const source = input.source;
+		if (source !== undefined && source.trim() !== "" && source !== AP_ADDED_TOPIC_SOURCE) {
+			prompt += ` This part is at ${source}.`;
+		}
 	}
 	return prompt;
 }
@@ -122,7 +125,7 @@ export function CourseView({
 			const response = await fetch(`/api/ap/${course.id}/plan`, {
 				method: "PUT",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ sections, confirm }),
+				body: JSON.stringify({ sections: fillAddedTopicSources(sections), confirm }),
 			});
 			if (!response.ok) {
 				const payload = (await response.json().catch(() => null)) as {

@@ -113,6 +113,7 @@ export function Composer({
 	placeholder = "Ask, answer, or steer the lesson…",
 	nextProblem = false,
 	onNext,
+	allowFilePaths = true,
 }: {
 	busy: boolean;
 	value: string;
@@ -138,6 +139,9 @@ export function Composer({
 	/** The signal's dispatcher (send({type:"next"})) — the chip and the
 	 *  empty-Enter share it. */
 	onNext?: () => void;
+	/** False makes the editor ignore inserted file paths (AP's name-only
+	 *  draft; the attach control is hidden too). Default true. */
+	allowFilePaths?: boolean;
 }) {
 	const act = () => {
 		const action = enterAction({ busy, canSend, nextProblem });
@@ -161,6 +165,7 @@ export function Composer({
 				value={value}
 				onValueChange={onChange}
 				defaultDropTarget
+				allowFilePaths={allowFilePaths}
 				onKeyDown={(e) => {
 					// Esc ends dictation before anything else Esc might someday mean
 					// here (the dictate decisions: click-again or Esc to stop).
@@ -184,7 +189,7 @@ export function Composer({
 				autoFocus={autoFocus}
 				className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 			/>
-			<AttachFilesButton editorRef={editorRef} />
+			{allowFilePaths && <AttachFilesButton editorRef={editorRef} />}
 			{/* The button follows the text (owner report 2026-10-03): while
 				 a turn runs WITH text typed it stays the SEND affordance
 				 (click = steer — steering must be clickable, not Enter-only);

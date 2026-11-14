@@ -207,7 +207,7 @@ export function DraftShell({
 											: mode === "testprep"
 												? "Name the test and attach the folder with its outline or slides. The agent will propose a plan for you to review."
 												: mode === "ap"
-													? "Name the course and attach the folder with its official course description or slides. The agent will propose units and topics for you to review."
+													? "Name the AP course you want to prepare for."
 													: "The teacher will open by probing what you already know."
 									}
 								/>
@@ -245,6 +245,7 @@ export function DraftShell({
 										canSend={canSend}
 										inputRef={composerInputRef}
 										autoFocus
+										allowFilePaths={mode !== "ap"}
 										onEscape={dictation.active ? dictation.cancel : undefined}
 										// The opening question, same as the graph view's new-session
 										// input (owner refinement round, 2026-09-24) — no lesson has

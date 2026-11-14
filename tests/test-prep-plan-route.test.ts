@@ -111,6 +111,23 @@ describe("PUT /api/tests/[id]/plan", () => {
 		assert.deepEqual(testStore.get(test.id), before, "a refused draft never writes");
 	});
 
+	it("still rejects a new point with a blank source — AP's filled source is AP-only", async () => {
+		const test = testStore.create("Blank source");
+		const before = testStore.get(test.id);
+
+		const res = await put(test.id, {
+			sections: [{ title: "Section A", points: [{ text: "A new point", source: "" }] }],
+			confirm: true,
+		});
+		assert.equal(res.status, 400);
+		const body = (await res.json()) as { problems?: unknown };
+		assert.ok(
+			(body.problems as string[]).some((problem) => /needs a source/.test(problem)),
+			"Test prep keeps requiring a source",
+		);
+		assert.deepEqual(testStore.get(test.id), before, "a refused draft never writes");
+	});
+
 	it("confirms a valid draft and answers 200 with the saved record", async () => {
 		const test = testStore.create("Confirm");
 

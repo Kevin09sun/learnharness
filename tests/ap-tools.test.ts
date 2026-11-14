@@ -22,7 +22,7 @@ import type { AnswerResult, PlanDraftSection } from "../src/core/test-prep.ts";
 import type { ApCourseRecord, ApDocument, ApSitting } from "../src/core/ap.ts";
 import { QUESTION_TOOLS, toolQuestionKind } from "../src/core/pending.ts";
 import { createApAgent } from "../src/agent/teacher-agent.ts";
-import { apTools, type ApCourseStorePort, type ApPapersPort, type ApToolContext } from "../src/agent/tools/ap.ts";
+import { apTools, capPdfExtract, AP_PDF_EXTRACT_MAX_PAGES, type ApCourseStorePort, type ApPapersPort, type ApToolContext } from "../src/agent/tools/ap.ts";
 import { tinyPdf } from "./helpers/tiny-pdf.ts";
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
@@ -419,6 +419,92 @@ describe("ap_save_document", () => {
 	});
 });
 
+// ── pdf_extract page cap ────────────────────────────────────────────────────
+
+/** Write a readable PDF of `pageCount` pages into the fake papers folder and
+ *  return its tool-facing path (bare file name under the scoped dir). */
+function writePdf(dir: string, file: string, pageCount: number): void {
+	const pages = Array.from({ length: pageCount }, (_, index) => ({
+		runs: [{ text: `Page ${index + 1}`, x: 72, y: 700 }],
+	}));
+	fs.writeFileSync(path.join(dir, file), tinyPdf(pages));
+}
+
+describe("pdf_extract — at most 15 pages per call", () => {
+	const REFUSAL = "Read at most 15 pages of the course description per call; ask for a specific page range.";
+
+	it("exposes the cap as a named constant", () => {
+		assert.equal(AP_PDF_EXTRACT_MAX_PAGES, 15);
+	});
+
+	it("REFUSES a request resolving to 16 pages before extracting anything", async () => {
+		const fake = fakeCourses(courseOf());
+		const papers = fakePapers();
+		writePdf(papers.dir, "long.pdf", 16);
+		const tool = apTools(ctxOf(fake.courses, papers.papers)).pdf_extract!;
+
+		const result = await tool.execute("call_x", { path: "long.pdf", pages: "1-16" } as never);
+		assert.equal(result.isError, true);
+		assert.deepEqual((result.details as { problems: string[] }).problems, [REFUSAL]);
+		const text = (result.content[0] as { text: string }).text;
+		assert.doesNotMatch(text, /--- Page 1 ---/, "nothing was extracted");
+	});
+
+	it("allows exactly 15 pages", async () => {
+		const fake = fakeCourses(courseOf());
+		const papers = fakePapers();
+		writePdf(papers.dir, "long.pdf", 16);
+		const tool = apTools(ctxOf(fake.courses, papers.papers)).pdf_extract!;
+
+		const result = await tool.execute("call_x", { path: "long.pdf", pages: "1-15" } as never);
+		assert.equal(result.isError, undefined);
+		assert.match((result.content[0] as { text: string }).text, /--- Page 15 ---/);
+	});
+
+	it("REFUSES `all` on a document longer than the cap", async () => {
+		const fake = fakeCourses(courseOf());
+		const papers = fakePapers();
+		writePdf(papers.dir, "long.pdf", 200);
+		const tool = apTools(ctxOf(fake.courses, papers.papers)).pdf_extract!;
+
+		const result = await tool.execute("call_x", { path: "long.pdf", pages: "all" } as never);
+		assert.equal(result.isError, true);
+		assert.deepEqual((result.details as { problems: string[] }).problems, [REFUSAL]);
+	});
+
+	it("allows `all` on a document of 15 pages or fewer", async () => {
+		const fake = fakeCourses(courseOf());
+		const papers = fakePapers();
+		writePdf(papers.dir, "short.pdf", 15);
+		const tool = apTools(ctxOf(fake.courses, papers.papers)).pdf_extract!;
+
+		const result = await tool.execute("call_x", { path: "short.pdf", pages: "all" } as never);
+		assert.equal(result.isError, undefined);
+		assert.match((result.content[0] as { text: string }).text, /--- Page 15 ---/);
+	});
+
+	it("does not call the underlying extract on a refusal", async () => {
+		let extracted = false;
+		const underlying = {
+			name: "pdf_extract",
+			label: "pdf_extract",
+			description: "underlying",
+			parameters: {} as never,
+			execute: async () => {
+				extracted = true;
+				return { content: [{ type: "text" as const, text: "extracted" }], details: "extracted" };
+			},
+		};
+		const papers = fakePapers();
+		writePdf(papers.dir, "long.pdf", 16);
+		const wrapped = capPdfExtract(underlying as never, papers.dir);
+
+		const result = await wrapped.execute("call_x", { path: "long.pdf", pages: "all" } as never);
+		assert.equal(result.isError, true);
+		assert.equal(extracted, false, "the refusal happens before any extraction");
+	});
+});
+
 // ── propose_units ───────────────────────────────────────────────────────────
 
 describe("propose_units", () => {
@@ -480,6 +566,7 @@ describe("propose_units", () => {
 			"The unit and topic list changes only in the course's setup session or on the course page, not during a sitting.",
 		);
 		assert.equal(fake.calls.savePlan.length, 0);
+		assert.equal(fake.calls.get.length, 0, "a sitting refusal never reads the course record");
 		assert.equal(fake.current().planConfirmed, true, "a sitting call never unconfirms the course");
 	});
 });

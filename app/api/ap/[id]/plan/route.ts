@@ -19,7 +19,7 @@
  * refuses a cross-site or cross-origin caller.
  */
 
-import { planProblems } from "@/src/core";
+import { fillAddedTopicSources, planProblems } from "@/src/core";
 import type { PlanDraftSection } from "@/src/core";
 import { sameOriginAuthorized, stores } from "@/src/server";
 
@@ -87,10 +87,14 @@ export async function PUT(
 		return Response.json({ error: "confirm must be a boolean." }, { status: 400 });
 	}
 
-	const problems = planProblems(sections);
+	// The AP editor has no source field: a topic the learner adds by hand gets
+	// the fixed source before validation. Points carrying an id are official
+	// and are left exactly as they are.
+	const filled = fillAddedTopicSources(sections);
+	const problems = planProblems(filled);
 	if (problems.length > 0) {
 		return Response.json({ error: "The plan has problems.", problems }, { status: 400 });
 	}
 
-	return Response.json(stores.apCourseStore.savePlan(id, sections, body.confirm));
+	return Response.json(stores.apCourseStore.savePlan(id, filled, body.confirm));
 }

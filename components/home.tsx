@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { CornerDownLeftIcon, DumbbellIcon, ClipboardListIcon } from "lucide-react";
 import { GraphView } from "@/components/graph-view";
@@ -82,6 +82,20 @@ export function homeCreationBody({
 			? { graphContext: { propositions: practiceProps } }
 			: {}),
 	};
+}
+
+/** The composer's attach control. AP starts a course by name only, so its
+ *  paperclip is absent; Teach, Practice and Test prep keep it unchanged
+ *  (2026-11-13). Exported so the render harness pins the surface. */
+export function HomeAttachButton({
+	mode,
+	editorRef,
+}: {
+	mode: HomeMode;
+	editorRef: RefObject<HTMLDivElement | null>;
+}) {
+	if (mode === "ap") return null;
+	return <AttachFilesButton editorRef={editorRef} />;
 }
 
 /**
@@ -345,7 +359,8 @@ export function Home({
 							topicRef.current = value;
 							setTopic(value);
 						}}
-						defaultDropTarget
+						defaultDropTarget={mode !== "ap"}
+						allowFilePaths={mode !== "ap"}
 						onKeyDown={(e) => {
 							// Esc ends dictation (the dictate decisions: click-again or
 							// Esc) — stopPropagation claims it (keyboard wave A) so
@@ -365,7 +380,7 @@ export function Home({
 						autoFocus
 						className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 					/>
-					<AttachFilesButton editorRef={topicInputRef} />
+					<HomeAttachButton mode={mode} editorRef={topicInputRef} />
 					{/* No tooltip on the start square — the ↵ glyph is the
 					    affordance (owner, subtlety round 2026-09-25). */}
 					<button

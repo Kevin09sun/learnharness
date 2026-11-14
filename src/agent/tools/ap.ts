@@ -30,7 +30,7 @@ import type { ApCourseRecord, ApDocument, ApSitting } from "../../core/ap.ts";
 import type { SearchProvider } from "../../core/search.ts";
 import type { EnabledTools } from "../../core/pending.ts";
 import { invalidInputResult, questionResult } from "../tool-execute.ts";
-import { pdfInfo } from "../subagents/pdf-ops.ts";
+import { pdfInfo, parsePageSpec } from "../subagents/pdf-ops.ts";
 import { createPdfReadTools } from "./pdf-read.ts";
 import { healEncodedArguments, healToolRecord } from "./heal.ts";
 import { readTool } from "./read.ts";
@@ -85,6 +85,12 @@ const CED_FILE = "ced.pdf";
 const CED_ID = "ced";
 const CED_FIRST =
 	"save the course description with ap_save_document first — the unit and topic list must come from it";
+
+/** The course description is read a few pages at a time: one pdf_extract call
+ *  may resolve to at most this many pages, so a whole 200-page CED cannot
+ *  flood the model's context or the saved session. */
+export const AP_PDF_EXTRACT_MAX_PAGES = 15;
+const AP_PDF_EXTRACT_REFUSAL = `Read at most ${AP_PDF_EXTRACT_MAX_PAGES} pages of the course description per call; ask for a specific page range.`;
 
 /** Plain-text result (these tools answer the model in prose, not JSON). */
 function textResult(text: string): AgentToolResult<string> {
@@ -478,6 +484,46 @@ function apRecordResultTool(ctx: ApToolContext): AgentTool<typeof apRecordResult
 	};
 }
 
+// ─── the page-capped pdf_extract ────────────────────────────────────────────
+
+/**
+ * Wrap the generic pdf_extract for AP: a call that resolves to more than
+ * AP_PDF_EXTRACT_MAX_PAGES pages — including `all` on a longer document — is
+ * refused before any extraction, as a retryable input problem. Requests within
+ * the cap, and a document of 15 pages or fewer, behave exactly as before. The
+ * tool's name, schema and description are unchanged; `info` is the pdfInfo
+ * page-count seam (injectable for tests).
+ */
+export function capPdfExtract(
+	tool: AgentTool<any>,
+	dir: string,
+	info: (filePath: string) => Promise<{ page_count: number }> = pdfInfo,
+): AgentTool<any> {
+	return {
+		...tool,
+		execute: async (toolCallId, input, signal, onUpdate) => {
+			const params = input as { path?: unknown; pages?: unknown } | null;
+			const filePath = typeof params?.path === "string" ? params.path : null;
+			const pages = typeof params?.pages === "string" ? params.pages : null;
+			if (filePath !== null && pages !== null) {
+				const root = path.resolve(dir) + path.sep;
+				const scoped = path.resolve(dir, filePath);
+				if (scoped.startsWith(root)) {
+					try {
+						const total = (await info(scoped)).page_count;
+						if (parsePageSpec(pages, total).length > AP_PDF_EXTRACT_MAX_PAGES) {
+							return invalidInputResult("pdf_extract", [AP_PDF_EXTRACT_REFUSAL]);
+						}
+					} catch {
+						// An unreadable path falls through to the tool's own error, unchanged.
+					}
+				}
+			}
+			return tool.execute(toolCallId, input, signal, onUpdate);
+		},
+	};
+}
+
 // ─── the registry ───────────────────────────────────────────────────────────
 
 /** The AP tutor's whole registry. The three pdf readers are scoped to the
@@ -485,13 +531,14 @@ function apRecordResultTool(ctx: ApToolContext): AgentTool<typeof apRecordResult
  *  demo/visual here. */
 export function apTools(ctx: ApToolContext, enabled?: EnabledTools): Record<string, AgentTool<any>> {
 	const jobs = ctx.jobs ? jobTools(ctx.jobs) : null;
-	const pdfTools = createPdfReadTools(ctx.papers.dir(ctx.courseId));
+	const papersDir = ctx.papers.dir(ctx.courseId);
+	const pdfTools = createPdfReadTools(papersDir);
 	// healToolRecord — the standard argument heal over the WHOLE registry
 	// (the practice/teacher/test-prep convention).
 	return healToolRecord({
 		ap_save_document: apSaveDocumentTool(ctx),
 		pdf_info: pdfTools.pdf_info!,
-		pdf_extract: pdfTools.pdf_extract!,
+		pdf_extract: capPdfExtract(pdfTools.pdf_extract!, papersDir),
 		pdf_search: pdfTools.pdf_search!,
 		propose_units: proposeUnitsTool(ctx),
 		ap_progress: apProgressTool(ctx),

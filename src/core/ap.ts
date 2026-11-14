@@ -9,7 +9,7 @@
  * unit-testable.
  */
 
-import { nextQueue, type TestPoint, type TestSection } from "./test-prep.ts";
+import { nextQueue, type PlanDraftSection, type TestPoint, type TestSection } from "./test-prep.ts";
 
 // ─── records ────────────────────────────────────────────────────────────────
 
@@ -68,6 +68,31 @@ export function isCollegeBoardUrl(url: string): boolean {
 	if (parsed.protocol !== "https:") return false;
 	const host = parsed.hostname.toLowerCase();
 	return host === "collegeboard.org" || host.endsWith(".collegeboard.org");
+}
+
+// ─── learner-added topics ───────────────────────────────────────────────────
+
+/** The fixed source a topic the learner adds by hand carries. The shared
+ *  editor has no source field, and planProblems requires one; the course
+ *  description's pages are only for topics that came from it. */
+export const AP_ADDED_TOPIC_SOURCE = "Added by you";
+
+/**
+ * Return a copy of a plan draft in which every newly added point (no id) with
+ * a blank or whitespace source carries AP_ADDED_TOPIC_SOURCE. Points that
+ * already have an id are provenance from the official list and are never
+ * altered; a new point the learner gave a source keeps it.
+ */
+export function fillAddedTopicSources(draft: PlanDraftSection[]): PlanDraftSection[] {
+	return draft.map((section) => ({
+		...(section.id === undefined ? {} : { id: section.id }),
+		title: section.title,
+		points: section.points.map((point) =>
+			point.id !== undefined || point.source.trim() !== ""
+				? point
+				: { ...point, source: AP_ADDED_TOPIC_SOURCE },
+		),
+	}));
 }
 
 // ─── a sitting ──────────────────────────────────────────────────────────────

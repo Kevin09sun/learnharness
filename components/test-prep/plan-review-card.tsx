@@ -61,6 +61,9 @@ export interface PlanReviewConfig {
 	saveError: string;
 	confirmMessage: string;
 	instruction: string;
+	/** Optional last look at the draft before it is PUT. Test prep leaves it
+	 *  unset; the AP card fills a learner-added topic's missing source. */
+	prepareDraft?: (sections: PlanDraftSection[]) => PlanDraftSection[];
 }
 
 export const TEST_PREP_PLAN_CONFIG: PlanReviewConfig = {
@@ -183,10 +186,11 @@ export function PlanReviewCard({
 		setSaving(true);
 		setError(null);
 		try {
+			const draft = config.prepareDraft ? config.prepareDraft(sections) : sections;
 			const response = await fetch(`${config.apiBase}/${linkedId}/plan`, {
 				method: "PUT",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ sections, confirm }),
+				body: JSON.stringify({ sections: draft, confirm }),
 			});
 			if (!response.ok) {
 				const payload = (await response.json().catch(() => null)) as {

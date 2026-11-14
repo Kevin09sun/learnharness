@@ -18,6 +18,11 @@ export type PathInputProps = Omit<React.HTMLAttributes<HTMLDivElement>, "childre
 	placeholder?: string;
 	autoFocus?: boolean;
 	defaultDropTarget?: boolean;
+	/** False stops file paths inserted by a drop, the attach picker or a
+	 *  folder picker from entering the draft (AP's name-only composer). Typing
+	 *  and dictation are unaffected. Default true: every existing surface keeps
+	 *  accepting attachments. */
+	allowFilePaths?: boolean;
 	/** Native text-input semantics: strip CR/LF and leave Enter to the caller. */
 	singleLine?: boolean;
 };
@@ -33,13 +38,13 @@ type Controller = {
  * views of it. React never reconciles the editable DOM after a native mutation.
  */
 export const PathInput = React.forwardRef<HTMLDivElement, PathInputProps>(function PathInput({
-	value, onValueChange, placeholder, autoFocus, defaultDropTarget = false, singleLine = false, className,
+	value, onValueChange, placeholder, autoFocus, defaultDropTarget = false, allowFilePaths = true, singleLine = false, className,
 	onKeyDown, onFocus, onBlur, onInput, onPaste, onCopy, onCut,
 	onCompositionStart, onCompositionEnd, ...props
 }, forwardedRef) {
 	const rootRef = React.useRef<HTMLDivElement>(null);
 	const controllerRef = React.useRef<Controller | null>(null);
-	const callbacks = React.useRef({ onValueChange, singleLine });
+	const callbacks = React.useRef({ onValueChange, singleLine, allowFilePaths });
 	const composing = React.useRef(false);
 	const [chips, setChips] = React.useState<ChipHost[]>([]);
 	// Keep this text child immutable: SSR/hydration gets the complete draft,
@@ -47,7 +52,7 @@ export const PathInput = React.forwardRef<HTMLDivElement, PathInputProps>(functi
 	const initial = React.useRef({ value: normalizePathInputValue(value, singleLine), autoFocus, singleLine });
 
 	React.useImperativeHandle(forwardedRef, () => rootRef.current!, []);
-	React.useLayoutEffect(() => { callbacks.current = { onValueChange, singleLine }; }, [onValueChange, singleLine]);
+	React.useLayoutEffect(() => { callbacks.current = { onValueChange, singleLine, allowFilePaths }; }, [onValueChange, singleLine, allowFilePaths]);
 
 	React.useLayoutEffect(() => {
 		const root = rootRef.current!;
@@ -104,6 +109,7 @@ export const PathInput = React.forwardRef<HTMLDivElement, PathInputProps>(functi
 			restorePathSelection(root, saved);
 		}
 		function insertEvent(event: Event) {
+			if (callbacks.current.allowFilePaths === false) return;
 			const paths: unknown = (event as CustomEvent<unknown>).detail;
 			if (Array.isArray(paths) && paths.every((path) => typeof path === "string")) stage(paths);
 		}

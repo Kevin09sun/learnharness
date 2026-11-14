@@ -27,6 +27,7 @@ import fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
+import { AP_ADDED_TOPIC_SOURCE } from "../src/core/ap.ts";
 
 // ── the seam, BEFORE any config-loading import ──────────────────────────────
 const TMP_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "lh-ap-routes-"));
@@ -261,6 +262,36 @@ describe("PUT /api/ap/[id]/plan", () => {
 		assert.equal(record.sections[0]?.points.length, 2);
 		assert.ok(record.sections[0]?.points.every((point) => point.status === "unchecked"));
 		assert.equal(apCourseStore.get(course.id)?.planConfirmed, true);
+	});
+
+	it("accepts a learner-added topic with no source and saves it as Added by you, unchecked", async () => {
+		const course = apCourseStore.create("AP Added topic");
+
+		const res = await putPlan(course.id, {
+			sections: [
+				{
+					title: "Unit 1",
+					points: [
+						{ text: "Topic 1.1", source: "ced.pdf" },
+						{ text: "A topic the learner added", source: "" },
+					],
+				},
+			],
+			confirm: true,
+		});
+		assert.equal(res.status, 200);
+		const record = (await res.json()) as {
+			sections: Array<{ points: Array<{ text: string; source: string; status: string }> }>;
+		};
+		const added = record.sections[0]!.points.find((point) => point.text === "A topic the learner added")!;
+		assert.equal(added.source, AP_ADDED_TOPIC_SOURCE, "the route fills the fixed source before validation");
+		assert.equal(added.status, "unchecked", "the added topic starts unchecked");
+
+		const stored = apCourseStore
+			.get(course.id)!
+			.sections[0]!.points.find((point) => point.text === "A topic the learner added")!;
+		assert.equal(stored.source, AP_ADDED_TOPIC_SOURCE, "the saved record carries the filled source");
+		assert.equal(stored.status, "unchecked");
 	});
 
 	it("keeps the status of a topic whose id rides the draft", async () => {

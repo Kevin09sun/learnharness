@@ -15,9 +15,11 @@ import React from "react";
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
 	HOME_MODES,
 	HOME_MODE_LABELS,
+	HomeAttachButton,
 	homeCreationBody,
 	homePlaceholder,
 	homeSendDisabled,
@@ -67,5 +69,21 @@ describe("the home AP send", () => {
 		const base = { mode: "testprep" as const, title: "Chapters 4-6", busy: false, dictationActive: false };
 		assert.equal(homeSendDisabled({ ...base, testName: "" }), true);
 		assert.equal(homeSendDisabled({ ...base, testName: "Bio midterm" }), false);
+	});
+});
+
+describe("home's attach control (name-only AP start, 2026-11-13)", () => {
+	it("AP renders no attach control", () => {
+		const html = renderToStaticMarkup(
+			<HomeAttachButton mode="ap" editorRef={React.createRef<HTMLDivElement>()} />,
+		);
+		assert.equal(html, "", "nothing is drawn in AP mode");
+	});
+
+	it("Test prep still renders its attach control", () => {
+		const html = renderToStaticMarkup(
+			<HomeAttachButton mode="testprep" editorRef={React.createRef<HTMLDivElement>()} />,
+		);
+		assert.ok(html.includes('data-testid="attach-files"'));
 	});
 });
