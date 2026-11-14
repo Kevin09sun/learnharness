@@ -1,5 +1,6 @@
 import type { Usage } from "@earendil-works/pi-ai";
 import {
+	createApAgent,
 	createPracticeAgent,
 	createProberAgent,
 	createTeacherAgent,
@@ -34,6 +35,7 @@ import { fileAccessPolicy } from "./file-access.ts";
 import { collectToolCallIds } from "./pi/call-ids.ts";
 import { providerEventNote } from "../agent/provider-events.ts";
 import { effectiveSettings, stores } from "./stores.ts";
+import { apPapers } from "./ap-papers.ts";
 import { searchAvailable, searchProvider } from "./search.ts";
 import { providerKeyPresent } from "./keys.ts";
 import { CLAUDE_CODE_PROVIDER } from "../core/contracts/claude-code.ts";
@@ -309,8 +311,8 @@ export async function handleChatInput(
 				effective.compaction?.thresholdTokens,
 				catalogContextLimits().get(modelIdForCompaction),
 			),
-			// ap: composeInstructions("ap") arrives with the AP agent
-			systemPromptTokens: Math.ceil(composeInstructions(record.kind === "practice" ? "practice" : record.kind === "testprep" ? "testprep" : "teacher").length / 4),
+			// ap composes the AP agent's own directory (Task 7 adds its files).
+			systemPromptTokens: Math.ceil(composeInstructions(record.kind === "practice" ? "practice" : record.kind === "testprep" ? "testprep" : record.kind === "ap" ? "ap" : "teacher").length / 4),
 		},
 		chatId,
 	);
@@ -484,7 +486,30 @@ export async function handleChatInput(
 	// uniform across kinds).
 	const constructed: TeachingAgent = buildAgent
 		? buildAgent({ ...agentOpts, teaching })
-		: record.kind === "testprep"
+		: record.kind === "ap"
+			? createApAgent(
+					{
+						chatId,
+						// The record guard above refuses an ap turn without an apCourseId.
+						courseId: record.apCourseId!,
+						sitting: record.apSitting,
+						courses: stores.apCourseStore,
+						papers: apPapers,
+						// The rarely-needed set, wired exactly like test prep's: the
+						// research + pdf jobs.
+						jobs: {
+							chatId,
+							jobStore: stores.jobStore,
+							spawn: (job, input) => void jobRunner.runJob(job.id, input),
+							searchAvailable,
+						},
+						// Direct web tools (2026-11-12): the live provider seam,
+						// behind the settings `web` switch.
+						search: searchProvider,
+					},
+					agentOpts,
+				)
+			: record.kind === "testprep"
 			? createTestPrepAgent(
 					{
 						chatId,
@@ -716,8 +741,8 @@ export async function handleChatInput(
 								fresh.compaction?.thresholdTokens,
 								catalogContextLimits().get(kickModelId),
 							),
-							// ap: composeInstructions("ap") arrives with the AP agent
-							systemPromptTokens: Math.ceil(composeInstructions(freshRecord.kind === "practice" ? "practice" : freshRecord.kind === "testprep" ? "testprep" : "teacher").length / 4),
+							// ap composes the AP agent's own directory (Task 7 adds its files).
+							systemPromptTokens: Math.ceil(composeInstructions(freshRecord.kind === "practice" ? "practice" : freshRecord.kind === "testprep" ? "testprep" : freshRecord.kind === "ap" ? "ap" : "teacher").length / 4),
 						};
 					}, chatId);
 			},
