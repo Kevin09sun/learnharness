@@ -83,6 +83,42 @@ describe("AP session deletion forgets the session's answers (AP prep stage 1, 20
 		const outcome = await deleteChatSession(chat, "preserve-graph");
 		assert.equal(outcome.ok, true, "a missing course is not an error");
 		assert.equal(chatStore.getChat(chat), null, "the session deletion stands");
-		assert.equal(apCourseStore.get(courseId), null);
+	});
+
+	it("deleting an AP chat whose course file holds invalid JSON still succeeds", async () => {
+		const { courseId } = confirmedCourse("Course unreadable");
+		const chat = apChat("Sitting with an unreadable course", courseId);
+		fs.writeFileSync(path.join(TMP_DATA, "ap", `${courseId}.json`), "{not json");
+
+		const outcome = await deleteChatSession(chat, "preserve-graph");
+		assert.equal(outcome.ok, true, "an unreadable course is not an error");
+		assert.equal(chatStore.getChat(chat), null, "the session deletion stands");
+	});
+
+	it("a failing course forget does not fail the session deletion", async () => {
+		const { courseId } = confirmedCourse("Forget fails");
+		const chat = apChat("Sitting with a locked course", courseId);
+		// The chat record is already gone when the forget runs, so a locked
+		// course file must not turn a completed deletion into an error.
+		const originalForget = apCourseStore.forgetChat;
+		const originalError = console.error;
+		const logged: unknown[][] = [];
+		apCourseStore.forgetChat = () => {
+			throw new Error("locked course file");
+		};
+		console.error = (...args: unknown[]) => {
+			logged.push(args);
+		};
+		try {
+			const outcome = await deleteChatSession(chat, "preserve-graph");
+			assert.equal(outcome.ok, true, "a failing forget is not a deletion failure");
+			assert.equal(chatStore.getChat(chat), null, "the chat record is gone");
+			const message = logged.map((args) => args.map(String).join(" ")).join("\n");
+			assert.match(message, new RegExp(chat), "the failure names the chat");
+			assert.match(message, new RegExp(courseId), "the failure names the course");
+		} finally {
+			apCourseStore.forgetChat = originalForget;
+			console.error = originalError;
+		}
 	});
 });

@@ -397,6 +397,26 @@ describe("ap_save_document", () => {
 		assert.match((result.details as { problems: string[] }).problems[0]!, /later version/i);
 		assert.equal(papers.calls.download.length, 0);
 	});
+
+	it("REFUSES inside a practice sitting without touching a port or the record", async () => {
+		const fake = fakeCourses(courseOf());
+		const papers = fakePapers();
+		const tool = apTools(ctxOf(fake.courses, papers.papers, WEAK)).ap_save_document!;
+		for (const input of [
+			{ kind: "ced", label: "Course and Exam Description", url: "https://apcentral.collegeboard.org/ced.pdf" },
+			{ kind: "ced", label: "Course and Exam Description", path: "C:/learner/ced.pdf" },
+		]) {
+			const result = await tool.execute("call_save", input as never);
+			assert.equal(result.isError, true);
+			assert.equal(
+				(result.details as { problems: string[] }).problems[0],
+				"The course description is saved only in the course's setup session, not during a sitting.",
+			);
+		}
+		assert.equal(papers.calls.download.length, 0);
+		assert.equal(papers.calls.importFile.length, 0);
+		assert.equal(fake.calls.putDocument.length, 0);
+	});
 });
 
 // ── propose_units ───────────────────────────────────────────────────────────
@@ -447,6 +467,20 @@ describe("propose_units", () => {
 		const result = await tool.execute("call_plan", { sections: [{ title: "", points: [] }] } as never);
 		assert.equal(result.isError, true);
 		assert.equal(fake.calls.savePlan.length, 0);
+	});
+
+	it("REFUSES inside a practice sitting without touching the record", async () => {
+		const fake = fakeCourses(courseOf({ documents: [CED] }));
+		const papers = fakePapers();
+		const tool = apTools(ctxOf(fake.courses, papers.papers, WEAK)).propose_units!;
+		const result = await tool.execute("call_plan", { sections: DRAFT } as never);
+		assert.equal(result.isError, true);
+		assert.equal(
+			(result.details as { problems: string[] }).problems[0],
+			"The unit and topic list changes only in the course's setup session or on the course page, not during a sitting.",
+		);
+		assert.equal(fake.calls.savePlan.length, 0);
+		assert.equal(fake.current().planConfirmed, true, "a sitting call never unconfirms the course");
 	});
 });
 

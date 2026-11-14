@@ -1758,4 +1758,23 @@ describe("session-kind turn guards", () => {
 		);
 		assert.equal(isTurnRunning(chat.id), false, "the refusal never registered a turn");
 	});
+
+	it("refuses an ap session whose sitting is invalid (500, before any turn effects)", async () => {
+		// A corrupt or hand-edited record: kind "ap" with an apSitting that
+		// does not parse. The agent build would otherwise pass the raw value
+		// to every AP tool's scope reads — refuse the turn up front.
+		const chat = chatStore.createChat("AP with an invalid sitting", "ap", undefined, {
+			courseId: "ap_course_guard",
+			sitting: { scope: { type: "bogus" }, kind: "mcq" } as never,
+		});
+		createdChats.push(chat.id);
+
+		const res = await handleChatInput(chat.id, { type: "text", text: "hi" });
+		assert.equal(res.status, 500);
+		assert.equal(
+			((await res.json()) as { error: string }).error,
+			"This AP session's sitting is not valid.",
+		);
+		assert.equal(isTurnRunning(chat.id), false, "the refusal never registered a turn");
+	});
 });

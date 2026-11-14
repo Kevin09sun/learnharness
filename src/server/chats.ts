@@ -158,7 +158,16 @@ function finishChatRecordDeletion(chatId: string): number {
 		discardChatDeliveries(chatId);
 		clearTurnFailure(chatId);
 		if (record?.kind === "ap" && record.apCourseId) {
-			stores.apCourseStore.forgetChat(record.apCourseId, chatId);
+			// The chat record is already gone: a locked or unwritable course
+			// file must not turn a completed deletion into an error.
+			try {
+				stores.apCourseStore.forgetChat(record.apCourseId, chatId);
+			} catch (error) {
+				console.error(
+					`[chat ${chatId}] could not forget its answers in AP course ${record.apCourseId}:`,
+					error,
+				);
+			}
 		}
 	}
 	return jobsRemoved;

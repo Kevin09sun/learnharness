@@ -14,6 +14,7 @@ import { nativeSubscriptionError } from "../agent/subscription-stream.ts";
 import { chatGPTStreamError } from "../agent/chatgpt-stream.ts";
 import { SubscriptionRequestCycle, type SubscriptionDispatchLifecycle } from "../agent/subscription-request-cycle.ts";
 import { reconstructRequestCause } from "../core/native-messages.ts";
+import { parseApSitting, type ApSitting } from "../core/index.ts";
 import { createJobRunner } from "../agent/subagents/runner.ts";
 import { createExtractionPipeline } from "../agent/subagents/extraction.ts";
 import type { ModelRole } from "../../config.ts";
@@ -222,6 +223,18 @@ export async function handleChatInput(
 	// and every call fail obscurely downstream — refuse the turn up front.
 	if (record.kind === "ap" && !record.apCourseId) {
 		return Response.json({ error: "This AP session is not linked to a course." }, { status: 500 });
+	}
+	// The sitting guard: the AP agent is built from record.apSitting, and a
+	// corrupt or hand-edited value would feed every tool's scope reads an
+	// unknown shape — parse it up front and refuse an invalid value. An
+	// absent sitting is the course's setup session and stays valid.
+	let apSitting: ApSitting | undefined;
+	if (record.kind === "ap" && record.apSitting !== undefined) {
+		const parsed = parseApSitting(record.apSitting);
+		if (!parsed) {
+			return Response.json({ error: "This AP session's sitting is not valid." }, { status: 500 });
+		}
+		apSitting = parsed;
 	}
 
 	// Refuse an ineligible Retry before catalog refresh, compaction, or any
@@ -492,7 +505,7 @@ export async function handleChatInput(
 						chatId,
 						// The record guard above refuses an ap turn without an apCourseId.
 						courseId: record.apCourseId!,
-						sitting: record.apSitting,
+						sitting: apSitting,
 						courses: stores.apCourseStore,
 						papers: apPapers,
 						// The rarely-needed set, wired exactly like test prep's: the

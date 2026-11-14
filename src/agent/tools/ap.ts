@@ -172,6 +172,13 @@ function apSaveDocumentTool(ctx: ApToolContext): AgentTool<typeof apSaveDocument
 		prepareArguments: (args: unknown) => healEncodedArguments(args, apSaveDocumentInputObject) as never,
 		executionMode: "sequential",
 		execute: async (_toolCallId, input) => {
+			// A sitting could otherwise replace ced.pdf and break every
+			// topic's source page — the description is a setup-session write.
+			if (ctx.sitting) {
+				return invalidInputResult("ap_save_document", [
+					"The course description is saved only in the course's setup session, not during a sitting.",
+				]);
+			}
 			if (input.kind !== "ced") {
 				return invalidInputResult("ap_save_document", [
 					`kind "${input.kind}" is not available yet — only the course description ("ced") is accepted in this version; free-response and scoring documents arrive in a later version`,
@@ -271,6 +278,14 @@ function proposeUnitsTool(ctx: ApToolContext): AgentTool<typeof proposeUnitsInpu
 		prepareArguments: (args: unknown) => healEncodedArguments(args, proposeUnitsInputObject) as never,
 		executionMode: "sequential",
 		execute: async (_toolCallId, input) => {
+			// The design's law: the tutor never changes the unit and topic
+			// list during practice — that belongs to the setup session or the
+			// course page. Refuse before any store call.
+			if (ctx.sitting) {
+				return invalidInputResult("propose_units", [
+					"The unit and topic list changes only in the course's setup session or on the course page, not during a sitting.",
+				]);
+			}
 			const course = ctx.courses.get(ctx.courseId);
 			if (!course) return invalidInputResult("propose_units", [`course "${ctx.courseId}" was not found`]);
 			const ced = course.documents.find((document) => document.kind === "ced");
