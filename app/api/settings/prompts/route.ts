@@ -1,17 +1,17 @@
 /**
  * GET /api/settings/prompts — the system-prompt segment view
  * (settings-storage wave, 2026-09-19): the effective prompt segments for
- * Teacher, Prober, Practice and Test prep, derived from SOURCE at runtime (src/agent/prompts — the
+ * Teacher, Prober, Practice, Test prep and AP, derived from SOURCE at runtime (src/agent/prompts — the
  * list adapts when the code ships/renames/removes fragments), each with
  * its source text, override text (if a file exists), and effective switch
  * state (settings record's agent.prompts map AND file presence).
  *
- *   GET → 200 {prober: SegmentInfo[], teacher: SegmentInfo[], practice: SegmentInfo[], testprep: SegmentInfo[]}
+ *   GET → 200 {prober: SegmentInfo[], teacher: SegmentInfo[], practice: SegmentInfo[], testprep: SegmentInfo[], ap: SegmentInfo[]}
  *   SegmentInfo = {path, sourceText, overrideText, enabled, shared}
  *
  * Shared usage is discoverable by path membership in these lists. The
- * shared base appears in Teacher and Prober, NOT Practice or Test prep;
- * both of those have their own base and a subset of shared fragments.
+ * shared base appears in Teacher and Prober, NOT Practice, Test prep or
+ * AP; those three have their own base and a subset of shared fragments.
  * Writes: the switches go through PUT /api/settings/agent; the TEXT goes
  * through PUT/DELETE /api/settings/prompts/[...segment].
  */
@@ -27,5 +27,6 @@ export async function GET() {
 		teacher: effectivePromptSegments("teacher", switches),
 		practice: effectivePromptSegments("practice", switches),
 		testprep: effectivePromptSegments("testprep", switches),
+		ap: effectivePromptSegments("ap", switches),
 	});
 }

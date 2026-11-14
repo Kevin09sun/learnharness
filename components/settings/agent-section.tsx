@@ -106,7 +106,7 @@ interface SegmentInfo {
 	shared: boolean;
 }
 
-type PromptView = Record<"teacher" | "prober" | "practice" | "testprep", SegmentInfo[]>;
+type PromptView = Record<"teacher" | "prober" | "practice" | "testprep" | "ap", SegmentInfo[]>;
 type PromptRow = SegmentInfo & { usageHint?: string };
 
 /** Compose: one tool toggled, the rest of the section carried verbatim.
@@ -229,6 +229,7 @@ export function sectionedSegments(view: Partial<PromptView>): PromptSection[] {
 		{ id: "prober", label: "Prober" },
 		{ id: "practice", label: "Practice" },
 		{ id: "testprep", label: "Test prep" },
+		{ id: "ap", label: "AP" },
 	] as const;
 	// Views may be partial (older API responses, test fixtures): an absent
 	// agent key means that section is skipped — never a crash, never an
@@ -983,7 +984,7 @@ export function AgentSection({
 					<p className="text-xs text-muted-foreground/70">Loading prompt segments…</p>
 				) : (
 					<div className="flex flex-col gap-4">
-						{/* Teacher, Prober, Practice, Test prep, Shared — shared
+						{/* Teacher, Prober, Practice, Test prep, AP, Shared — shared
 						    chunks once, each agent's own section in
 						    prompt-assembly order. */}
 						{sectionedSegments(prompts).map((section) => (

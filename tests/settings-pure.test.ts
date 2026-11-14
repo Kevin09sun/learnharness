@@ -344,6 +344,7 @@ describe("sectionedSegments — actual per-agent prompt membership", () => {
 			{ path: "shared/10-personality.md", sourceText: "s1", overrideText: "custom", enabled: true, shared: true },
 		],
 		testprep: [],
+		ap: [],
 		teacher: [
 			{ path: "system-prompt.md", sourceText: "b", overrideText: null, enabled: false, shared: true },
 			{ path: "shared/20-question-tools.md", sourceText: "q", overrideText: null, enabled: false, shared: true },
@@ -353,9 +354,9 @@ describe("sectionedSegments — actual per-agent prompt membership", () => {
 		],
 	};
 
-	it("the approved order: Teacher, Prober, Practice, Test prep, Shared — Shared last", () => {
+	it("the approved order: Teacher, Prober, Practice, Test prep, AP, Shared — Shared last", () => {
 		const ids = sectionedSegments(view).map((s) => s.id);
-		assert.deepEqual(ids, ["teacher", "prober", "practice", "testprep", "shared"]);
+		assert.deepEqual(ids, ["teacher", "prober", "practice", "testprep", "ap", "shared"]);
 	});
 
 	it("shared chunks appear exactly ONCE across all sections (no duplication)", () => {
@@ -367,8 +368,8 @@ describe("sectionedSegments — actual per-agent prompt membership", () => {
 	});
 
 	it("the Shared section holds the shared chunks in assembly order; the agents' sections hold their own", () => {
-		const [teacher, prober, practice, testprep, shared] = sectionedSegments(view);
-		assert.ok(teacher && prober && practice && testprep && shared, "all five sections present");
+		const [teacher, prober, practice, testprep, ap, shared] = sectionedSegments(view);
+		assert.ok(teacher && prober && practice && testprep && ap && shared, "all six sections present");
 		assert.deepEqual(teacher.segments.map((s) => s.path), ["teacher/05-method.md", "teacher/10-planning.md"]);
 		assert.deepEqual(prober.segments.map((s) => s.path), ["prober/10-probe-doctrine.md"]);
 		// assembly order: the base file first, then the shared fragments
