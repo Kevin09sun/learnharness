@@ -8,7 +8,7 @@ import { PathText } from "@/components/file-path-chip";
 import { cn } from "@/lib/utils";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import type { QuestionAnswerData } from "@/src/core";
-import { answerForPresentation, parseAskInput, parseExplainInput, parseQuizInput } from "@/src/core";
+import { answerForPresentation, parseApMcqInput, parseAskInput, parseExplainInput, parseQuizInput } from "@/src/core";
 
 /**
  * Static rendering of an answered question (tool part in `output-available`).
@@ -32,6 +32,12 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 	}
 
 	const isQuiz = answer.kind === "quiz";
+	// AP multiple choice is quiz-shaped, but the verdict is the tutor's
+	// (stage 1 global constraint): NO graded chip, no ✓/✗ or green/red
+	// option marking, no explanation/Why control, no confidence rail. The
+	// pick keeps the neutral selected styling.
+	const isAp = answer.tool === "ap_mcq";
+	const gradedQuiz = isQuiz && !isAp;
 	const isExplain = answer.kind === "explain";
 	const selectedIdx = new Set(answer.answers.map((a) => a.index));
 	const correctIdx = new Set(answer.correctIndices ?? []);
@@ -47,9 +53,11 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 	// explain-shaped `details` — the same visible field the dock shows — so
 	// the answered record keeps it too. Explain/recall cards are unchanged.
 	const checkPointInput = answer.tool === "check_point" ? parseExplainInput(input) : undefined;
+	const apMcqInput = isAp ? parseApMcqInput(input) : undefined;
 	const parsedDetails =
+		apMcqInput?.details ??
 		askInput?.details ??
-		(answer.kind === "quiz" ? parseQuizInput(input)?.details : checkPointInput?.details);
+		(isQuiz && !isAp ? parseQuizInput(input)?.details : checkPointInput?.details);
 	const descByIndex = new Map((askInput?.options ?? []).map((o, i) => [i + 1, o.description]));
 
 	return (
@@ -80,14 +88,16 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 						? "Recall"
 						: answer.tool === "check_point"
 							? "Check"
-							: isQuiz
-								? answer.questionType === "predict"
-									? "Prediction"
-									: "Check"
-								: isExplain
-									? "Explain"
-										: "Question"}
-				{isQuiz &&
+							: isAp
+								? "AP · generated"
+								: isQuiz
+									? answer.questionType === "predict"
+										? "Prediction"
+										: "Check"
+									: isExplain
+										? "Explain"
+											: "Question"}
+				{gradedQuiz &&
 					(answer.dontKnow ? (
 						<span className="rounded bg-muted px-1.5 py-0.5">didn't know</span>
 					) : answer.correct ? (
@@ -111,19 +121,19 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 				<div className="flex flex-col gap-1.5 text-sm">
 					{answer.options?.map((opt) => {
 						const sel = selectedIdx.has(opt.index);
-						const key = isQuiz && correctIdx.has(opt.index);
+						const key = gradedQuiz && correctIdx.has(opt.index);
 						return (
 							<div
 								key={opt.index}
 								className={cn(
 									"flex items-center gap-2 rounded-lg border px-3 py-1.5",
 									sel && key && "border-green-500/60 bg-green-500/10",
-									sel && !key && isQuiz && "border-red-500/60 bg-red-500/10",
-									sel && !isQuiz && "border-primary bg-accent",
+									sel && !key && gradedQuiz && "border-red-500/60 bg-red-500/10",
+									sel && !gradedQuiz && "border-primary bg-accent",
 									!sel && key && "border-green-500/40",
 								)}
 							>
-								{isQuiz && (
+								{gradedQuiz && (
 									// Zapf-Dingbats-derived SVG outlines — the exact LaTeX \ding{51}/
 									// \ding{55} hand-drawn shapes (owner, round 6); see ui/glyph-mark.
 									<span
@@ -178,7 +188,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 			    "I don't know" sent none (its slider was grayed out), explain and
 			    ask never had one, and records from before the feature carry no
 			    field — nothing to show, nothing rendered. */}
-			{isQuiz && answer.confidence != null && (
+			{gradedQuiz && answer.confidence != null && (
 				<div className="mt-3 flex items-center gap-3" data-testid="answered-confidence">
 					<ConfidenceRail value={answer.confidence} className="min-w-0 flex-1" />
 					<span className="w-9 shrink-0 text-right font-mono text-sm tabular-nums text-muted-foreground">
@@ -197,7 +207,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 				    the accent lift read too light); rail only, heights identical. */
 				<ThinkingBlock
 					testId="your-thinking"
-					label="YOUR THINKING"
+					label={isAp ? "YOUR REASONING" : "YOUR THINKING"}
 					text={answer.thinking ?? answer.note ?? ""}
 					inCard
 				/>
@@ -206,7 +216,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 			{/* px-3→removed: card p-4 + box px-3 double-inset sat the "Why" label deeper
 			    than the option box edges (owner, round 3). Sides flush with everything
 			    else; py-2 stays for vertical air. */}
-			{isQuiz && answer.explanation && (
+			{gradedQuiz && answer.explanation && (
 				/* The TUCKED explanation — ALL questions (owner, 2026-10-07): the
 				   verdict shows, the explanation sits collapsed behind the Why
 				   toggle — viewable, never center stage. Identical to the
