@@ -57,14 +57,17 @@ export const QUESTION_TOOLS = [
 	"explain",
 	"recall",
 	"check_point",
+	"ap_mcq",
 ] as const;
 
 /** The tool→kind map (the dock's own fold, named once — the dismissal
  *  path and the dock must never disagree on what a tool is). The probe
- *  names fold onto their teach kinds, and test prep's check_point is an
- *  explain-shaped free-text question — the dock is kind-driven. */
+ *  names fold onto their teach kinds, test prep's check_point is an
+ *  explain-shaped free-text question, and AP's ap_mcq is a quiz-shaped
+ *  multiple-choice question (the verdict is withheld in the core
+ *  presentation seams, not by the kind). The dock is kind-driven. */
 export function toolQuestionKind(tool: string): "quiz" | "ask" | "explain" {
-	return tool === "quiz" || tool === "probe"
+	return tool === "quiz" || tool === "probe" || tool === "ap_mcq"
 		? "quiz"
 		: tool === "explain" || tool === "recall" || tool === "check_point"
 			? "explain"
@@ -181,6 +184,11 @@ const ACTIVITY_LABELS: Record<string, string> = {
 	pdf: "Reading a PDF…",
 	plan_init: "Drawing up the plan…",
 	probe_done: "Concluding the assessment…",
+	// AP prep (2026-11-13): the course-shape proposal, the paper download and
+	// the progress check all run long enough to need their own label.
+	ap_save_document: "Saving the course description…",
+	propose_units: "Proposing units and topics…",
+	ap_progress: "Checking progress…",
 };
 
 /** The activity label for ONE running tool (owner, streaming round

@@ -1,5 +1,6 @@
 import type { Usage } from "@earendil-works/pi-ai";
 import {
+	createApAgent,
 	createPracticeAgent,
 	createProberAgent,
 	createTeacherAgent,
@@ -13,6 +14,7 @@ import { nativeSubscriptionError } from "../agent/subscription-stream.ts";
 import { chatGPTStreamError } from "../agent/chatgpt-stream.ts";
 import { SubscriptionRequestCycle, type SubscriptionDispatchLifecycle } from "../agent/subscription-request-cycle.ts";
 import { reconstructRequestCause } from "../core/native-messages.ts";
+import { parseApSitting, type ApSitting } from "../core/index.ts";
 import { createJobRunner } from "../agent/subagents/runner.ts";
 import { createExtractionPipeline } from "../agent/subagents/extraction.ts";
 import type { ModelRole } from "../../config.ts";
@@ -34,6 +36,7 @@ import { fileAccessPolicy } from "./file-access.ts";
 import { collectToolCallIds } from "./pi/call-ids.ts";
 import { providerEventNote } from "../agent/provider-events.ts";
 import { effectiveSettings, stores } from "./stores.ts";
+import { apPapers } from "./ap-papers.ts";
 import { searchAvailable, searchProvider } from "./search.ts";
 import { providerKeyPresent } from "./keys.ts";
 import { CLAUDE_CODE_PROVIDER } from "../core/contracts/claude-code.ts";
@@ -215,6 +218,24 @@ export async function handleChatInput(
 	if (record.kind === "testprep" && !record.testId) {
 		return Response.json({ error: "This test prep session is not linked to a test." }, { status: 500 });
 	}
+	// The AP twin: an AP session is defined by its linked course record. A
+	// record with no apCourseId would have the AP tools read an undefined id
+	// and every call fail obscurely downstream — refuse the turn up front.
+	if (record.kind === "ap" && !record.apCourseId) {
+		return Response.json({ error: "This AP session is not linked to a course." }, { status: 500 });
+	}
+	// The sitting guard: the AP agent is built from record.apSitting, and a
+	// corrupt or hand-edited value would feed every tool's scope reads an
+	// unknown shape — parse it up front and refuse an invalid value. An
+	// absent sitting is the course's setup session and stays valid.
+	let apSitting: ApSitting | undefined;
+	if (record.kind === "ap" && record.apSitting !== undefined) {
+		const parsed = parseApSitting(record.apSitting);
+		if (!parsed) {
+			return Response.json({ error: "This AP session's sitting is not valid." }, { status: 500 });
+		}
+		apSitting = parsed;
+	}
 
 	// Refuse an ineligible Retry before catalog refresh, compaction, or any
 	// turn/write effects. Revalidate after the awaited gates below too.
@@ -298,12 +319,13 @@ export async function handleChatInput(
 			engine: piEngineForSpec(conversation, true, undefined, retentionForSlot("strong")),
 			canStart: () => connectionBackgroundAllowed(conversation.provider),
 			modelId: modelIdForCompaction,
-			kind: record.kind === "practice" ? "practice" : record.kind === "testprep" ? "testprep" : hasProbeDone(record.messages) ? "teach" : "probe",
+			kind: record.kind === "practice" ? "practice" : record.kind === "testprep" ? "testprep" : record.kind === "ap" ? "ap" : hasProbeDone(record.messages) ? "teach" : "probe",
 			thresholdTokens: effectiveThresholdTokens(
 				effective.compaction?.thresholdTokens,
 				catalogContextLimits().get(modelIdForCompaction),
 			),
-			systemPromptTokens: Math.ceil(composeInstructions(record.kind === "practice" ? "practice" : record.kind === "testprep" ? "testprep" : "teacher").length / 4),
+			// ap composes the AP agent's own directory (Task 7 adds its files).
+			systemPromptTokens: Math.ceil(composeInstructions(record.kind === "practice" ? "practice" : record.kind === "testprep" ? "testprep" : record.kind === "ap" ? "ap" : "teacher").length / 4),
 		},
 		chatId,
 	);
@@ -477,7 +499,30 @@ export async function handleChatInput(
 	// uniform across kinds).
 	const constructed: TeachingAgent = buildAgent
 		? buildAgent({ ...agentOpts, teaching })
-		: record.kind === "testprep"
+		: record.kind === "ap"
+			? createApAgent(
+					{
+						chatId,
+						// The record guard above refuses an ap turn without an apCourseId.
+						courseId: record.apCourseId!,
+						sitting: apSitting,
+						courses: stores.apCourseStore,
+						papers: apPapers,
+						// The rarely-needed set, wired exactly like test prep's: the
+						// research + pdf jobs.
+						jobs: {
+							chatId,
+							jobStore: stores.jobStore,
+							spawn: (job, input) => void jobRunner.runJob(job.id, input),
+							searchAvailable,
+						},
+						// Direct web tools (2026-11-12): the live provider seam,
+						// behind the settings `web` switch.
+						search: searchProvider,
+					},
+					agentOpts,
+				)
+			: record.kind === "testprep"
 			? createTestPrepAgent(
 					{
 						chatId,
@@ -704,12 +749,13 @@ export async function handleChatInput(
 							engine: kickEngine,
 							canStart: () => connectionBackgroundAllowed(spec.provider),
 							modelId: kickModelId,
-							kind: freshRecord.kind === "practice" ? "practice" : freshRecord.kind === "testprep" ? "testprep" : hasProbeDone(freshRecord.messages) ? "teach" : "probe",
+							kind: freshRecord.kind === "practice" ? "practice" : freshRecord.kind === "testprep" ? "testprep" : freshRecord.kind === "ap" ? "ap" : hasProbeDone(freshRecord.messages) ? "teach" : "probe",
 							thresholdTokens: effectiveThresholdTokens(
 								fresh.compaction?.thresholdTokens,
 								catalogContextLimits().get(kickModelId),
 							),
-							systemPromptTokens: Math.ceil(composeInstructions(freshRecord.kind === "practice" ? "practice" : freshRecord.kind === "testprep" ? "testprep" : "teacher").length / 4),
+							// ap composes the AP agent's own directory (Task 7 adds its files).
+							systemPromptTokens: Math.ceil(composeInstructions(freshRecord.kind === "practice" ? "practice" : freshRecord.kind === "testprep" ? "testprep" : freshRecord.kind === "ap" ? "ap" : "teacher").length / 4),
 						};
 					}, chatId);
 			},

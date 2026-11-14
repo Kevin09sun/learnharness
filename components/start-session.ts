@@ -1,13 +1,19 @@
+import type { ApSitting } from "@/src/core";
 import { clearOpeningPrompt, OPENING_PROMPT_FAILURE, stashOpeningPrompt } from "./opening-prompt";
 
 interface SessionCreation {
 	title: string;
-	kind?: "practice" | "testprep";
+	kind?: "practice" | "testprep" | "ap";
 	graphContext?: { propositions: readonly { id: string; name: string; statement: string }[] };
 	/** A testprep sitting names the test: a new one by title (the start
 	 *  draft) or an existing record by id (Continue on the readiness page). */
 	testTitle?: string;
 	testId?: string;
+	/** An AP sitting names the course by id (the course page's Learn and
+	 *  Practise buttons) and, for Practise, the scope and question kind. */
+	apCourseTitle?: string;
+	apCourseId?: string;
+	apSitting?: ApSitting;
 }
 
 /** Per source-composer instance. Retain a successful creation if storage

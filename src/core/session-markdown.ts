@@ -29,6 +29,7 @@ import {
 	SEND_TO_USER_TOOL,
 	userFacingTextOf,
 } from "./native-messages.ts";
+import type { QuestionAnswerData } from "./question-core.ts";
 import type { ToolResultMessage } from "@earendil-works/pi-ai";
 
 /** The practice join context (owner-approved, 2026-10-06 export round):
@@ -83,6 +84,27 @@ function toolResultBody(result: ToolResultMessage, ctx?: MarkdownContext): { hea
 				dismissed: boolean;
 		  }>
 		| undefined;
+
+	// AP multiple choice: the export shows the question, the options, the
+	// learner's pick and reasoning — never a correctness mark, the correct
+	// option or the option notes (the tutor's reply is the verdict).
+	if (result.toolName === "ap_mcq") {
+		const answer = result.details as Partial<QuestionAnswerData> | undefined;
+		const question = typeof answer?.questionText === "string" && answer.questionText ? answer.questionText : "(no question text)";
+		const body = [`**Q:** ${question}`];
+		if (Array.isArray(answer?.options) && answer.options.length > 0) {
+			body.push(answer.options.map((option) => `- ${option.label}`).join("\n"));
+		}
+		if (answer?.dismissed === true) body.push("The learner skipped this question.");
+		else if (answer?.dontKnow === true) body.push("The learner did not know.");
+		else {
+			const picks = Array.isArray(answer?.answers) ? answer.answers.map((choice) => choice.label).filter(Boolean) : [];
+			if (picks.length > 0) body.push(`The learner chose: ${picks.join(", ")}`);
+		}
+		const thinking = answer?.thinking ?? answer?.note;
+		if (typeof thinking === "string" && thinking) body.push(`*(his thinking: ${thinking})*`);
+		return { heading: "AP question", body };
+	}
 
 	if (
 		result.toolName === "quiz" ||

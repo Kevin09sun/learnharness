@@ -8,6 +8,7 @@ import { ProbeDoneCard } from "@/components/artifacts/probe-done-card";
 import { ToolCallCard } from "@/components/artifacts/tool-call-card";
 import { ProblemCard, ConcludeCard } from "@/components/practice-cards";
 import { PlanReviewCard } from "@/components/test-prep/plan-review-card";
+import { UnitsReviewCard } from "@/components/ap/units-review-card";
 
 /**
  * Artifact renderer registry — the extension point for tool-part UI.
@@ -64,4 +65,16 @@ export const artifactRenderers: Record<string, ComponentType<ArtifactPartProps>>
 	propose_plan: PlanReviewCard,
 	test_progress: ToolCallCard,
 	record_result: ToolCallCard,
+	// AP prep (2026-11-13): the units-and-topics proposal is the course's
+	// plan-review artifact (the same card, AP words and endpoints). Every
+	// other AP tool is trace-only in the quiet expanded-card register. The
+	// MCQ card is deliberately NOT here: ap_mcq renders through the
+	// question dock so no raw tool input reaches the transcript.
+	propose_units: UnitsReviewCard,
+	ap_progress: ToolCallCard,
+	ap_record_result: ToolCallCard,
+	ap_save_document: ToolCallCard,
+	pdf_info: ToolCallCard,
+	pdf_extract: ToolCallCard,
+	pdf_search: ToolCallCard,
 };

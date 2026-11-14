@@ -356,6 +356,115 @@ export function explainInputProblems(input: { correctAnswer: string }): string[]
 	return [];
 }
 
+// ─── the AP multiple-choice question (AP prep stage 1) ─────────────────────
+//
+// Four options, exactly one correct, and a note per option. The correct
+// answer and the notes are the model's COMMITMENT: the learner never sees
+// either, and the dock never grades in the UI — the tutor's next reply is
+// the verdict. The commitment rides the persisted call args like practice's
+// hidden modelSolution; only `details` is the visible channel.
+
+export const apMcqInputObject = Type.Object({
+	topicId: Type.String({
+		description:
+			"REQUIRED — the official topic this question checks, exactly as it appears in the course plan.",
+	}),
+	question: Type.String({
+		description:
+			"The single multiple-choice question to ask. ONE question per turn: ask, then end your turn — the answer " +
+			"determines the next question.",
+	}),
+	options: Type.Array(Type.Object(quizOptionProps), {
+		minItems: 4,
+		maxItems: 4,
+		description:
+			"REQUIRED — exactly four answer options as a JSON ARRAY of option objects — never a JSON-encoded string. " +
+			"Give each option a stable `value`; you reference the correct one by that value in correctAnswer. " +
+			"Never add your own 'I don't know' option — that choice is added for you.",
+	}),
+	correctAnswer: Type.String({
+		description:
+			"REQUIRED. The correct option's value — the `value` field of the one option you intend. This is a " +
+			"COMMITMENT: it is NEVER shown to the learner. Grade his answer against it when it returns.",
+	}),
+	optionNotes: Type.Array(
+		Type.String({
+			description:
+				"One note for the option at the same position in `options` — why it is right or wrong. NEVER shown " +
+				"to the learner; it is your grading commitment.",
+		}),
+		{
+			minItems: 4,
+			maxItems: 4,
+			description:
+				"REQUIRED — exactly four notes, one per option in order (optionNotes[i] belongs to options[i]). " +
+				"NEVER shown to the learner.",
+		},
+	),
+	details: Type.Optional(
+		Type.String({
+			description:
+				"Optional extra context shown under the question. This is the VISIBLE channel: after a miss, it " +
+				"carries the diagnosis (the short explanation) with the fresh question.",
+		}),
+	),
+});
+
+export type ApMcqToolInput = Static<typeof apMcqInputObject>;
+
+/**
+ * The AP authoring contract. Empty result = a question the dock can arm and
+ * the tutor can grade. Messages are the model-facing retry text: exact,
+ * single-problem sentences (stage 1 brief).
+ */
+export function apMcqInputProblems(input: unknown): string[] {
+	const problems: string[] = [];
+	const value = (typeof input === "object" && input !== null ? input : {}) as {
+		question?: unknown;
+		options?: unknown;
+		correctAnswer?: unknown;
+		optionNotes?: unknown;
+	};
+
+	if (typeof value.question !== "string" || value.question.trim().length === 0) {
+		problems.push("question must not be blank");
+	}
+
+	const options = Array.isArray(value.options) ? value.options : [];
+	if (options.length !== 4) problems.push("exactly four options are required");
+
+	// The shared option shape (label + optional value), resolved exactly as
+	// normalizeOptions keys it: trimmed value, falling back to the label.
+	const optionParts = options.map((option) => {
+		const record = (typeof option === "object" && option !== null ? option : {}) as {
+			label?: unknown;
+			value?: unknown;
+		};
+		const label = typeof record.label === "string" ? record.label.trim() : "";
+		const key = typeof record.value === "string" && record.value.trim() ? record.value.trim() : label;
+		return { label, key };
+	});
+	const labels = optionParts.map((option) => option.label);
+	if (labels.some((label) => label.length === 0) || new Set(labels).size !== labels.length) {
+		problems.push("option labels must be non-empty and distinct");
+	}
+
+	// Reuse the quiz correctAnswer resolution: the model may paste a value,
+	// a label, or a JSON-ish string; it must land on exactly one option.
+	const keys = optionParts.map((option) => option.key);
+	const entries =
+		typeof value.correctAnswer === "string" ? coerceCorrectAnswer(value.correctAnswer, keys) : [];
+	const matches = entries.length === 1 ? keys.filter((key) => key === entries[0]).length : 0;
+	if (entries.length !== 1 || matches !== 1) problems.push("correctAnswer must match exactly one option");
+
+	const notes = Array.isArray(value.optionNotes) ? value.optionNotes : [];
+	if (notes.length !== 4) problems.push("exactly four option notes are required, one per option");
+	if (notes.some((note) => typeof note !== "string" || note.trim().length === 0)) {
+		problems.push("option notes must not be blank");
+	}
+	return problems;
+}
+
 /** The tool names that carry the quizzing mechanic — the teach seam
  *  (phases), the plan-position fold, and the pending gate all recognize
  *  whichever is armed. */
@@ -736,9 +845,11 @@ export function buildAnswer(qd: QuestionData, req: AnswerRequest, tool?: string)
 		base.explanation = qd.explanation;
 		base.correct = base.dontKnow ? false : isCorrect(base.answers.map((a) => a.index), qd.correctIndices ?? []);
 		// The confidence slider rides on real quiz answers only — never on
-		// "I don't know" (no answer, no probability). Clamped defensively;
-		// the dock snaps to the grid, the record accepts any integer.
-		if (!base.dontKnow && req.confidence !== undefined) {
+		// "I don't know" (no answer, no probability) and never on an AP
+		// multiple-choice answer (the verdict is withheld; stage 1 forbids
+		// the slider). Clamped defensively; the dock snaps to the grid, the
+		// record accepts any integer.
+		if (tool !== "ap_mcq" && !base.dontKnow && req.confidence !== undefined) {
 			base.confidence = Math.max(0, Math.min(100, Math.round(req.confidence)));
 		}
 	}

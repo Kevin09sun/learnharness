@@ -21,6 +21,10 @@ import type { PlanDraftSection } from "@/src/core";
  * reuses it for "Edit plan".
  */
 
+function capitalise(word: string): string {
+	return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
 function cloneDraft(sections: PlanDraftSection[]): PlanDraftSection[] {
 	return sections.map((section) => ({
 		...(section.id === undefined ? {} : { id: section.id }),
@@ -38,6 +42,8 @@ export function PlanEditor({
 	onSave,
 	saving = false,
 	submitLabel = "Confirm plan",
+	sectionLabel = "section",
+	pointLabel = "point",
 }: {
 	initial: PlanDraftSection[];
 	onSave: (sections: PlanDraftSection[], confirm: boolean) => void;
@@ -45,7 +51,12 @@ export function PlanEditor({
 	/** The action's label — "Confirm plan" on a proposal, "Save plan" when
 	 *  the readiness view edits an already-confirmed plan. */
 	submitLabel?: string;
+	/** The record's own words for its two tiers. Defaults keep Test prep's
+	 *  "section"/"point"; the AP course editor passes "unit"/"topic". */
+	sectionLabel?: string;
+	pointLabel?: string;
 }) {
+	const sectionWord = capitalise(sectionLabel);
 	const [sections, setSections] = useState<PlanDraftSection[]>(() => cloneDraft(initial));
 
 	function editSection(index: number, update: (section: PlanDraftSection) => PlanDraftSection): void {
@@ -69,9 +80,9 @@ export function PlanEditor({
 				<div key={section.id ?? `section-${sectionIndex}`} className="rounded-lg border bg-background/50 p-3">
 					<div className="flex items-start gap-2">
 						<Input
-							aria-label={`Section ${sectionIndex + 1} title`}
+							aria-label={`${sectionWord} ${sectionIndex + 1} title`}
 							value={section.title}
-							placeholder="Section title"
+							placeholder={`${sectionWord} title`}
 							onChange={(event) =>
 								editSection(sectionIndex, (current) => ({ ...current, title: event.target.value }))
 							}
@@ -81,7 +92,7 @@ export function PlanEditor({
 							type="button"
 							variant="ghost"
 							size="icon-sm"
-							aria-label={`Remove section ${sectionIndex + 1}`}
+							aria-label={`Remove ${sectionLabel} ${sectionIndex + 1}`}
 							onClick={() => setSections((current) => current.filter((_, i) => i !== sectionIndex))}
 						>
 							<XIcon className="size-3.5" />
@@ -93,7 +104,7 @@ export function PlanEditor({
 							<li key={point.id ?? `point-${sectionIndex}-${pointIndex}`} className="flex items-start gap-2">
 								<div className="min-w-0 flex-1">
 									<Input
-										aria-label={`Section ${sectionIndex + 1}, point ${pointIndex + 1}`}
+										aria-label={`${sectionWord} ${sectionIndex + 1}, ${pointLabel} ${pointIndex + 1}`}
 										value={point.text}
 										placeholder="What is tested"
 										onChange={(event) =>
@@ -114,7 +125,7 @@ export function PlanEditor({
 									type="button"
 									variant="ghost"
 									size="icon-sm"
-									aria-label={`Remove section ${sectionIndex + 1}, point ${pointIndex + 1}`}
+									aria-label={`Remove ${sectionLabel} ${sectionIndex + 1}, ${pointLabel} ${pointIndex + 1}`}
 									onClick={() =>
 										editSection(sectionIndex, (current) => ({
 											...current,
@@ -140,7 +151,7 @@ export function PlanEditor({
 							}))
 						}
 					>
-						Add point
+						Add {pointLabel}
 					</Button>
 				</div>
 			))}
@@ -154,7 +165,7 @@ export function PlanEditor({
 						setSections((current) => [...current, { title: "", points: [{ text: "", source: "" }] }])
 					}
 				>
-					Add section
+					Add {sectionLabel}
 				</Button>
 				<Button type="button" size="sm" disabled={saving} onClick={() => onSave(sections, true)}>
 					{saving ? "Saving…" : submitLabel}

@@ -28,15 +28,22 @@ import type {
 	NotesSource,
 } from "./contracts.ts";
 import type { UserSettings } from "./settings.ts";
+import type { ApSitting } from "./ap.ts";
 
 // ─── ChatStore — the session record's home (data/chats) ─────────────────────
 
 export interface ChatStore {
 	/** Create a session record (persisted immediately). */
-	/** Create a session record; kind "practice" | "testprep" marks a
+	/** Create a session record; kind "practice" | "testprep" | "ap" marks a
 	 *  non-teach session (absent = teach, the default). testprep also
-	 *  carries the linked test record's id. */
-	createChat(title: string, kind?: "practice" | "testprep", testId?: string): ChatRecord;
+	 *  carries the linked test record's id; ap carries its course and,
+	 *  when it is a practice sitting, the sitting. */
+	createChat(
+		title: string,
+		kind?: "practice" | "testprep" | "ap",
+		testId?: string,
+		ap?: { courseId: string; sitting?: ApSitting },
+	): ChatRecord;
 	/** The full record, or null if unknown id / corrupt file. */
 	getChat(id: string): ChatRecord | null;
 	/** All sessions, newest activity first (the sidebar's list view). */

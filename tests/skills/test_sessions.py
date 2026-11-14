@@ -188,6 +188,22 @@ class SessionsTest(unittest.TestCase):
         self.assertIn("Skipped/dismissed**: true", text)
         self.assertIn("Learner answers (stored display labels/indexes)**: []", text)
 
+    def test_ap_mcq_answers_are_question_tools(self):
+        payload = {"kind": "quiz", "questionText": "MCQ snapshot", "answers": [{"label": "2"}],
+                   "correctAnswer": "2", "explanation": "Teacher verdict"}
+        source = record([
+            assistant(call("ap_mcq", {"topicId": "t_1", "question": "Which limit?"})),
+            result("ap_mcq", payload),
+        ])
+        self.assertIn("ap_mcq", sessions.QUESTION_TOOLS)
+        text = self.render(source)
+        self.assertIn("Learner answer snapshot", text)
+        self.assertIn("MCQ snapshot", text)
+        self.assertIn("Teacher verdict", text)
+        self.assertIn("Archival view", text)
+        self.assertNotIn("Unsupported/unrendered tool-result semantics", text)
+        self.assertNotIn("Unsupported/unrendered tool semantics", text)
+
     def test_json_content_fallback_when_details_absent_or_null(self):
         payload = {"kind": "explain", "text": "fallback answer", "note": "old note", "thinkingWhileReading": "fallback reading", "confidence": 0}
         for details in ({}, {"details": None}):

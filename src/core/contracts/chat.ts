@@ -10,6 +10,7 @@ import type { LhMessage } from "../native-messages.ts";
 import type { Phase3 } from "../phases.ts";
 import type { PlanNodeStatus, PlanTree } from "./plan.ts";
 import type { EmissionStats } from "./graph.ts";
+import type { ApSitting } from "../ap.ts";
 
 // ─── Chat records (the session store's on-disk format) ───────────────────────
 
@@ -26,8 +27,10 @@ import type { EmissionStats } from "./graph.ts";
  *  reads as teach); "practice" marks an adaptive-practice session — the
  *  practice agent, its two tools, no extraction, no graph writes.
  *  "testprep" (2026-11-10) marks a Test prep session linked to a test
- *  record — it extracts like teach (spec "Knowledge graph"). */
-export type ChatKind = "teach" | "practice" | "testprep";
+ *  record — it extracts like teach (spec "Knowledge graph"). "ap"
+ *  (2026-11-13) marks an AP session linked to a course, with the sitting
+ *  it asks about when it is a practice sitting. */
+export type ChatKind = "teach" | "practice" | "testprep" | "ap";
 
 export interface ChatRecord {
 	id: string;
@@ -41,6 +44,11 @@ export interface ChatRecord {
 	kind?: ChatKind;
 	/** Test prep sessions: the test record this session prepares for. */
 	testId?: string;
+	/** AP sessions: the course this session prepares for. */
+	apCourseId?: string;
+	/** AP practice sittings: the scope and kind this sitting asks about;
+	 *  absent on the course's setup session. */
+	apSitting?: ApSitting;
 	/** The session's plan tree (vision §2) — written by plan tools via saveTree. */
 	tree?: PlanTree;
 	/** Append-only usage log (observability, 2026-09): one entry per model
@@ -271,6 +279,11 @@ export interface ChatSummary {
 	kind: ChatKind;
 	/** Test prep sessions: the linked test record (absent on other kinds). */
 	testId?: string;
+	/** AP sessions: the linked course record (absent on other kinds). */
+	apCourseId?: string;
+	/** AP practice sittings: the sitting's scope and kind (absent on the
+	 *  course's setup session and on other kinds). */
+	apSitting?: ApSitting;
 	messageCount: number;
 	/** The session's current phase, derived from the stored plan tree. */
 	phase: Phase3;

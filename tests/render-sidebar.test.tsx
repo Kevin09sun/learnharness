@@ -14,7 +14,7 @@ import React from "react";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { SessionRow, timeAgo } from "../components/sidebar.tsx";
+import { SessionDoorLinks, SessionRow, timeAgo } from "../components/sidebar.tsx";
 import type { ChatListItem } from "../src/core/index.ts";
 
 function item(overrides: Partial<ChatListItem>): ChatListItem {
@@ -120,6 +120,22 @@ describe("SessionRow", () => {
 		const html = render(item({}), true);
 		assert.ok(html.includes("bg-accent"), "active background");
 		assert.ok(!html.includes("font-medium"), "weight is not a second channel doing the same job");
+	});
+});
+
+describe("Session doors (AP prep, 2026-11-13)", () => {
+	it("the AP link opens /ap directly after the Tests link", () => {
+		const html = renderToStaticMarkup(
+			<SessionDoorLinks onNewTeaching={() => {}} onNewPractice={() => {}} />,
+		);
+		const ids = [...html.matchAll(/data-testid="([^"]+)"/g)].map((match) => match[1]);
+		const tests = ids.indexOf("tests-link");
+		assert.ok(tests !== -1, "the Tests door stays");
+		assert.equal(ids[tests + 1], "ap-link", "AP sits directly after Tests");
+		const apTag = html.match(/<a[^>]*data-testid="ap-link"[^>]*>/)?.[0] ?? "";
+		assert.match(apTag, /href="\/ap"/);
+		assert.match(html, />\s*AP\s*</);
+		assert.match(html, /view your AP courses/);
 	});
 });
 

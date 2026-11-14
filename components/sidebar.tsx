@@ -400,6 +400,66 @@ export function RenameRow({ chat, onCommit, onCancel }: { chat: ChatListItem; on
  *  Teaching / All / Practice — a client-side filter over the same
  *  snapshot, persisted in localStorage, defaulting to All. */
 export type SessionKindFilter = "teach" | "all" | "practice";
+
+/** The doors above the session list (pure — the render seam): the two
+ *  create buttons, then one link per prep surface. Test prep's readiness
+ *  page joined Practice in 2026-11-10; AP's course list joins 2026-11-13,
+ *  directly after Tests, in the same register. */
+export function SessionDoorLinks({
+	onNewTeaching,
+	onNewPractice,
+}: {
+	onNewTeaching: () => void;
+	onNewPractice: () => void;
+}) {
+	return (
+		<div className="mx-3 mb-2 flex flex-col gap-1.5">
+			<button
+				type="button"
+				data-testid="new-session"
+				onClick={onNewTeaching}
+				className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+			>
+				<PlusIcon className="size-3" />
+				Teaching
+				<span className="sr-only">create a new teaching session</span>
+			</button>
+			<button
+				type="button"
+				data-testid="new-session-practice"
+				onClick={onNewPractice}
+				className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+			>
+				<DumbbellIcon className="size-3" />
+				Practice
+				<span className="sr-only">create a new practice session</span>
+			</button>
+			{/* Test prep's readiness page (test prep, 2026-11-10): one
+			    door to the Tests list beside the existing Practice entry. */}
+			<Link
+				href="/tests"
+				data-testid="tests-link"
+				className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+			>
+				<ClipboardListIcon className="size-3" />
+				Tests
+				<span className="sr-only">view your test readiness</span>
+			</Link>
+			{/* AP's course list (AP prep, 2026-11-13): the same register,
+			    directly after Tests. */}
+			<Link
+				href="/ap"
+				data-testid="ap-link"
+				className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+			>
+				<ClipboardListIcon className="size-3" />
+				AP
+				<span className="sr-only">view your AP courses</span>
+			</Link>
+		</div>
+	);
+}
+
 const KIND_FILTER_KEY = "lh:session-kind-filter";
 
 function SessionsSidebar() {
@@ -709,39 +769,10 @@ function SessionsSidebar() {
 				    half/half row): full-width rows read cleaner and give the
 				    labels room; teaching keeps the original draft route,
 				    practice carries its mode. */}
-				<div className="mx-3 mb-2 flex flex-col gap-1.5">
-					<button
-						type="button"
-						data-testid="new-session"
-						onClick={() => void newSession()}
-						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-					>
-						<PlusIcon className="size-3" />
-						Teaching
-						<span className="sr-only">create a new teaching session</span>
-					</button>
-					<button
-						type="button"
-						data-testid="new-session-practice"
-						onClick={() => router.push("/chat/new?mode=practice")}
-						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-					>
-						<DumbbellIcon className="size-3" />
-						Practice
-						<span className="sr-only">create a new practice session</span>
-					</button>
-					{/* Test prep's readiness page (test prep, 2026-11-10): one
-					    door to the Tests list beside the existing Practice entry. */}
-					<Link
-						href="/tests"
-						data-testid="tests-link"
-						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-					>
-						<ClipboardListIcon className="size-3" />
-						Tests
-						<span className="sr-only">view your test readiness</span>
-					</Link>
-				</div>
+				<SessionDoorLinks
+					onNewTeaching={() => void newSession()}
+					onNewPractice={() => router.push("/chat/new?mode=practice")}
+				/>
 
 				<div className="mx-3 mb-2 flex items-center gap-2">
 					<span className="text-xs uppercase tracking-widest text-muted-foreground/70">Sessions</span>

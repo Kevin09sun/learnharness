@@ -28,11 +28,72 @@ import type { ArtifactPartProps, LhViewMessage, PlanDraftSection, TestRecord } f
  * unconfirmed (the record is the single latest saved revision, so an earlier
  * card showing it would let the learner "confirm" a scope that no longer
  * matches its own message); earlier parts collapse to one muted line.
+ *
+ * AP (2026-11-13) reuses the whole behaviour through `config`: the words
+ * become unit/topic, the chat link field is `apCourseId`, and the endpoints
+ * live under /api/ap and /ap. The default config is exactly Test prep's
+ * rendering.
  */
 
-/** The latest propose_plan call in the session view, or null when the
- *  context has no view (tests/previews keep the card interactive). */
-function latestProposePlanCallId(messages: readonly LhViewMessage[] | undefined): string | null {
+/** The record shape both records share — the fields this card renders. */
+type PlanRecord = Pick<TestRecord, "id" | "title" | "planConfirmed" | "sections">;
+
+export interface PlanReviewConfig {
+	/** The tool whose settled parts are the proposals. */
+	toolName: string;
+	/** The chat record field carrying the linked record's id. */
+	chatKey: "testId" | "apCourseId";
+	/** e.g. "/api/tests" — the record's plan route base. */
+	apiBase: string;
+	/** e.g. "/tests" — the record's page base. */
+	pageBase: string;
+	sectionLabel: string;
+	pointLabel: string;
+	submitLabel: string;
+	proposedTitle: string;
+	confirmedTitle: string;
+	openPage: string;
+	superseded: string;
+	loading: string;
+	notLinked: string;
+	loadError: string;
+	unavailable: string;
+	saveError: string;
+	confirmMessage: string;
+	instruction: string;
+	/** Optional last look at the draft before it is PUT. Test prep leaves it
+	 *  unset; the AP card fills a learner-added topic's missing source. */
+	prepareDraft?: (sections: PlanDraftSection[]) => PlanDraftSection[];
+}
+
+export const TEST_PREP_PLAN_CONFIG: PlanReviewConfig = {
+	toolName: "propose_plan",
+	chatKey: "testId",
+	apiBase: "/api/tests",
+	pageBase: "/tests",
+	sectionLabel: "section",
+	pointLabel: "point",
+	submitLabel: "Confirm plan",
+	proposedTitle: "Proposed plan",
+	confirmedTitle: "Plan confirmed",
+	openPage: "Open readiness",
+	superseded: "This plan was revised below.",
+	loading: "Loading the plan…",
+	notLinked: "This session is not linked to a test.",
+	loadError: "Could not load the test plan.",
+	unavailable: "The plan is unavailable.",
+	saveError: "The plan could not be saved.",
+	confirmMessage: "I've confirmed the plan.",
+	instruction:
+		"Check every point against your outline — each one shows the line or slide it came from. Edit anything that is off, then confirm.",
+};
+
+/** The latest proposal call in the session view, or null when the context
+ *  has no view (tests/previews keep the card interactive). */
+function latestProposalCallId(
+	messages: readonly LhViewMessage[] | undefined,
+	toolName: string,
+): string | null {
 	if (!messages) return null;
 	for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex--) {
 		const parts = messages[messageIndex]?.parts ?? [];
@@ -41,7 +102,7 @@ function latestProposePlanCallId(messages: readonly LhViewMessage[] | undefined)
 			// Only a SETTLED call saved a revision; a failed/interrupted call
 			// (output-error, input-available) never superseded the record.
 			if (
-				candidate?.type === "tool-propose_plan" &&
+				candidate?.type === `tool-${toolName}` &&
 				candidate.state === "output-available" &&
 				typeof candidate.toolCallId === "string"
 			) {
@@ -52,7 +113,9 @@ function latestProposePlanCallId(messages: readonly LhViewMessage[] | undefined)
 	return null;
 }
 
-function toDraft(sections: TestRecord["sections"]): PlanDraftSection[] {
+type PlanSections = TestRecord["sections"];
+
+function toDraft(sections: PlanSections): PlanDraftSection[] {
 	return sections.map((section) => ({
 		id: section.id,
 		title: section.title,
@@ -64,11 +127,20 @@ function errorText(reason: unknown, fallback: string): string {
 	return reason instanceof Error && reason.message !== "" ? reason.message : fallback;
 }
 
-export function PlanReviewCard({ part }: ArtifactPartProps) {
+function countLine(config: PlanReviewConfig, sections: number, points: number): string {
+	return `${sections} ${sections === 1 ? config.sectionLabel : `${config.sectionLabel}s`} · ${points} ${
+		points === 1 ? config.pointLabel : `${config.pointLabel}s`
+	}`;
+}
+
+export function PlanReviewCard({
+	part,
+	config = TEST_PREP_PLAN_CONFIG,
+}: ArtifactPartProps & { config?: PlanReviewConfig }) {
 	const actions = useContext(ChatActionsContext);
 	const chatId = actions?.chatId;
-	const [record, setRecord] = useState<TestRecord | null>(null);
-	const [testId, setTestId] = useState<string | null>(null);
+	const [record, setRecord] = useState<PlanRecord | null>(null);
+	const [linkedId, setLinkedId] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -83,19 +155,20 @@ export function PlanReviewCard({ part }: ArtifactPartProps) {
 			try {
 				const chatResponse = await fetch(`/api/chats/${chatId}`);
 				if (!chatResponse.ok) throw new Error("Could not load this session.");
-				const chat = (await chatResponse.json()) as { testId?: unknown };
-				if (typeof chat.testId !== "string" || chat.testId === "") {
-					throw new Error("This session is not linked to a test.");
+				const chat = (await chatResponse.json()) as Record<string, unknown>;
+				const id = chat[config.chatKey];
+				if (typeof id !== "string" || id === "") {
+					throw new Error(config.notLinked);
 				}
 				if (!alive) return;
-				setTestId(chat.testId);
+				setLinkedId(id);
 
-				const recordResponse = await fetch(`/api/tests/${chat.testId}/plan`);
-				if (!recordResponse.ok) throw new Error("Could not load the test plan.");
-				const loaded = (await recordResponse.json()) as TestRecord;
+				const recordResponse = await fetch(`${config.apiBase}/${id}/plan`);
+				if (!recordResponse.ok) throw new Error(config.loadError);
+				const loaded = (await recordResponse.json()) as PlanRecord;
 				if (alive) setRecord(loaded);
 			} catch (reason) {
-				if (alive) setError(errorText(reason, "Could not load the test plan."));
+				if (alive) setError(errorText(reason, config.loadError));
 			} finally {
 				if (alive) setLoading(false);
 			}
@@ -103,20 +176,21 @@ export function PlanReviewCard({ part }: ArtifactPartProps) {
 		return () => {
 			alive = false;
 		};
-	}, [chatId]);
+	}, [chatId, config]);
 
-	const latestProposalId = latestProposePlanCallId(actions?.messages);
+	const latestProposalId = latestProposalCallId(actions?.messages, config.toolName);
 	const isLatestProposal = latestProposalId === null || latestProposalId === part.toolCallId;
 
 	async function save(sections: PlanDraftSection[], confirm: boolean): Promise<void> {
-		if (!testId) return;
+		if (!linkedId) return;
 		setSaving(true);
 		setError(null);
 		try {
-			const response = await fetch(`/api/tests/${testId}/plan`, {
+			const draft = config.prepareDraft ? config.prepareDraft(sections) : sections;
+			const response = await fetch(`${config.apiBase}/${linkedId}/plan`, {
 				method: "PUT",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ sections, confirm }),
+				body: JSON.stringify({ sections: draft, confirm }),
 			});
 			if (!response.ok) {
 				const payload = (await response.json().catch(() => null)) as {
@@ -131,14 +205,14 @@ export function PlanReviewCard({ part }: ArtifactPartProps) {
 						? problems.join(" ")
 						: typeof payload?.error === "string"
 							? payload.error
-							: "The plan could not be saved.",
+							: config.saveError,
 				);
 			}
-			const saved = (await response.json()) as TestRecord;
+			const saved = (await response.json()) as PlanRecord;
 			setRecord(saved);
-			if (confirm) actions?.sendText("I've confirmed the plan.");
+			if (confirm) actions?.sendText(config.confirmMessage);
 		} catch (reason) {
-			setError(errorText(reason, "The plan could not be saved."));
+			setError(errorText(reason, config.saveError));
 		} finally {
 			setSaving(false);
 		}
@@ -150,7 +224,7 @@ export function PlanReviewCard({ part }: ArtifactPartProps) {
 	if (loading) {
 		return (
 			<div data-testid="plan-review-card" className="my-1 rounded-xl border bg-card p-4 text-sm text-muted-foreground">
-				Loading the plan…
+				{config.loading}
 			</div>
 		);
 	}
@@ -158,7 +232,7 @@ export function PlanReviewCard({ part }: ArtifactPartProps) {
 	if (!record) {
 		return (
 			<div data-testid="plan-review-card" className="my-1 rounded-xl border bg-card p-4 text-sm text-muted-foreground">
-				{error ?? "The plan is unavailable."}
+				{error ?? config.unavailable}
 			</div>
 		);
 	}
@@ -166,7 +240,7 @@ export function PlanReviewCard({ part }: ArtifactPartProps) {
 	if (!isLatestProposal) {
 		return (
 			<div data-testid="plan-superseded" className="my-1 px-1 text-sm text-muted-foreground/70">
-				This plan was revised below.
+				{config.superseded}
 			</div>
 		);
 	}
@@ -176,18 +250,17 @@ export function PlanReviewCard({ part }: ArtifactPartProps) {
 		return (
 			<div data-testid="plan-confirmed" className="my-1 rounded-xl border bg-card p-4">
 				<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-					Plan confirmed
+					{config.confirmedTitle}
 				</div>
 				<div className="text-[15px] font-medium">{record.title}</div>
 				<div className="mt-0.5 text-sm text-muted-foreground">
-					{record.sections.length} {record.sections.length === 1 ? "section" : "sections"} · {points}{" "}
-					{points === 1 ? "point" : "points"}
+					{countLine(config, record.sections.length, points)}
 				</div>
 				<a
-					href={`/tests/${record.id}`}
+					href={`${config.pageBase}/${record.id}`}
 					className="mt-2 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline"
 				>
-					Open readiness
+					{config.openPage}
 				</a>
 			</div>
 		);
@@ -195,12 +268,18 @@ export function PlanReviewCard({ part }: ArtifactPartProps) {
 
 	return (
 		<div data-testid="plan-review-card" className="my-1 rounded-xl border bg-card p-4">
-			<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Proposed plan</div>
-			<p className="mb-3 text-sm text-muted-foreground">
-				Check every point against your outline — each one shows the line or slide it came from. Edit
-				anything that is off, then confirm.
-			</p>
-			<PlanEditor initial={toDraft(record.sections)} onSave={save} saving={saving} />
+			<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+				{config.proposedTitle}
+			</div>
+			<p className="mb-3 text-sm text-muted-foreground">{config.instruction}</p>
+			<PlanEditor
+				initial={toDraft(record.sections)}
+				onSave={save}
+				saving={saving}
+				submitLabel={config.submitLabel}
+				sectionLabel={config.sectionLabel}
+				pointLabel={config.pointLabel}
+			/>
 			{error && <p className="mt-2 text-sm text-red-500">{error}</p>}
 		</div>
 	);

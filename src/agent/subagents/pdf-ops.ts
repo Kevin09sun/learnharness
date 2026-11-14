@@ -111,6 +111,17 @@ export async function pdfProbe(filePath: string): Promise<void> {
 	await task.destroy();
 }
 
+/** The page count alone — same open as pdfInfo, but no page walk and no
+ *  text extraction. The AP extract cap's cheap gate on long documents. */
+export async function pdfPageCount(filePath: string): Promise<number> {
+	const { doc, task } = await openDocument(filePath);
+	try {
+		return doc.numPages;
+	} finally {
+		await task.destroy();
+	}
+}
+
 /** pdf_info: page count + per-page triage signals. ALWAYS run first. */
 export async function pdfInfo(filePath: string): Promise<PdfInfo> {
 	const pdfjs = await loadPdfjs(); // OPS constant for the operator-list scan

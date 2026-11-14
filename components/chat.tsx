@@ -62,7 +62,7 @@ import { PracticeDock } from "@/components/practice-dock";
 import { ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
 import { GraphContextCard, type GraphContextData } from "@/components/graph-context-card";
 import { TopBar } from "@/components/top-bar";
-import type { ArtifactPartProps, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TokenTotals, TurnUsage, SessionPricing } from "@/src/core";
+import type { ArtifactPartProps, ChatKind, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TokenTotals, TurnUsage, SessionPricing } from "@/src/core";
 import type { LhViewMessage } from "@/src/core";
 import { PhaseChip, PhaseDivider } from "@/components/phase-divider";
 import {
@@ -81,6 +81,7 @@ import {
 	findPendingToolCall,
 	phaseAt3,
 	phaseTimeline,
+	QUESTION_TOOLS,
 	teachStepIndex,
 	toolQuestionKind,
 	questionNeedsReveal,
@@ -188,6 +189,52 @@ export function retryFailedResponse(
 /** useLayoutEffect that is silent during SSR (client components still render on the server in Next). */
 const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
+/**
+ * How a tool part routes in the transcript. Question tools are client-owned:
+ * a settled answer renders the AnsweredCard, every other state stays out of
+ * the transcript entirely (the live question lives in the dock; letting it
+ * fall through would print the raw call input — the model's correctAnswer
+ * and optionNotes commitment — in LiveToolCard while the question streams).
+ * Non-question tools keep the ordinary transcript/artifact routing.
+ */
+export function questionPartDisposition(type: string, state: string | undefined): "suppress" | "answered" | "default" {
+	if (!(QUESTION_TOOLS as readonly string[]).includes(type.replace(/^tool-/, ""))) return "default";
+	return state === "output-available" ? "answered" : "suppress";
+}
+
+/** The session's door back to its home surface (pure — the header render
+ *  test's seam): a Test prep session links to its test's readiness page, an
+ *  AP session to its course page. No linked record → no door. */
+export function SessionHomeDoor({
+	kind,
+	testId,
+	apCourseId,
+}: {
+	kind: ChatKind;
+	testId?: string;
+	apCourseId?: string;
+}) {
+	const className =
+		"lh-no-drag flex shrink-0 items-center gap-1.5 rounded-full border border-border/80 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:border-border hover:text-foreground";
+	if (kind === "testprep" && testId) {
+		return (
+			<Link href={`/tests/${testId}`} data-testid="test-readiness-link" className={className}>
+				<ClipboardListIcon className="size-3.5 text-primary" aria-hidden />
+				Readiness
+			</Link>
+		);
+	}
+	if (kind === "ap" && apCourseId) {
+		return (
+			<Link href={`/ap/${apCourseId}`} data-testid="ap-course-link" className={className}>
+				<ClipboardListIcon className="size-3.5 text-primary" aria-hidden />
+				Course page
+			</Link>
+		);
+	}
+	return null;
+}
+
 /** A wake-pipeline steer message: user-role delivery whose metadata marks it
  * as a sub-agent result — rendered as an artifact card, never a bubble. */
 /** The quiet system line (custom-message scheme rendering): centered, muted,
@@ -228,6 +275,7 @@ export function Chat({
 	initialConfigured = false,
 	kind = "teach",
 	testId,
+	apCourseId,
 }: {
 	chatId: string;
 	title: string;
@@ -237,10 +285,14 @@ export function Chat({
 	/** The session kind (practice sessions, owner 2026-10-04): practice
 	 *  renders no phase chip (no probe→teach arc applies) and a Practice
 	 *  tag rides the header instead. Test prep (2026-11-10) renders
-	 *  teach-like and links its header back to the test's readiness page. */
-	kind?: "teach" | "practice" | "testprep";
+	 *  teach-like and links its header back to the test's readiness page.
+	 *  AP (2026-11-13) likewise renders teach-like, hides the phase chip,
+	 *  and links its header back to the course page. */
+	kind?: ChatKind;
 	/** The linked test record (testprep only) — the readiness link target. */
 	testId?: string;
+	/** The linked course (ap only) — the course-page link target. */
+	apCourseId?: string;
 	initialPrompt?: string;
 	/** A teacher turn is running server-side but attached to no client
 	 * (navigated away mid-turn, returned while in flight). */
@@ -1385,19 +1437,11 @@ export function Chat({
 						</button>
 </Hint>
 					)}
-					{/* A testprep session's door back to its test (test prep,
-					    2026-11-10): the session works one sitting; the readiness
-					    page is where progress across sittings lives. */}
-					{kind === "testprep" && testId && (
-						<Link
-							href={`/tests/${testId}`}
-							data-testid="test-readiness-link"
-							className="lh-no-drag flex shrink-0 items-center gap-1.5 rounded-full border border-border/80 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:border-border hover:text-foreground"
-						>
-							<ClipboardListIcon className="size-3.5 text-primary" aria-hidden />
-							Readiness
-						</Link>
-					)}
+					{/* The session's door back to its home surface: a testprep
+					    session links to its test's readiness page (the session
+					    works one sitting; progress across sittings lives there),
+					    an AP session to its course page (AP prep, 2026-11-13). */}
+					<SessionHomeDoor kind={kind} testId={testId} apCourseId={apCourseId} />
 					{/* The extraction ring (owner-locked redesign, 2026-09-24): fills
 					    with uncovered vs the chunk threshold, pulses while a run is in
 					    flight, vanishes when the graph is off. Click → the exact
@@ -1407,7 +1451,7 @@ export function Chat({
 				    run behind it would lie. */}
 					{kind !== "practice" && <CoverageRing chatId={chatId} refreshKey={coverageTick} />}
 					{/* Practice sessions: no phase arc — a quiet Practice tag
-					    instead of the phase chip. Test prep: no phase arc
+					    instead of the phase chip. Test prep and AP: no phase arc
 					    either, so the chip is omitted entirely. */}
 					{kind === "practice" ? (
 						<span
@@ -1419,7 +1463,7 @@ export function Chat({
 							<DumbbellIcon className="size-3" />
 							Practice
 						</span>
-					) : kind === "testprep" ? null : (
+					) : kind === "testprep" || kind === "ap" ? null : (
 						<PhaseChip phase={phases.at(-1) ?? "probe"} />
 					)}
 				</TopBar>
@@ -1580,6 +1624,26 @@ export function Chat({
 														</SystemLine>
 													);
 												}
+												// Question tools never reach the switch: their live states
+												// are suppressed and only a settled answer renders.
+												const questionDisposition = questionPartDisposition(part.type, part.state);
+												if (questionDisposition !== "default") {
+													const malformed = !busy && malformedQuestions.find(call => call.messageId === part.sourceMessageId && call.contentIndex === part.sourceContentIndex && call.toolCallId === part.toolCallId);
+													if (malformed) return <MalformedQuestion key={pi} disabled={!!pending || compacting}
+														reason={pending ? "Answer or discard the remaining question first." : undefined}
+														onRetry={() => {
+															draftRef.current = null;
+															void send({ type: "retry-question", messageId: malformed.messageId, contentIndex: malformed.contentIndex, toolCallId: malformed.toolCallId });
+														}} />;
+													// Pending/streaming questions live in the dock, not the
+													// transcript; answered ones render as records.
+													if (questionDisposition === "answered") {
+														return (
+															<AnsweredCard key={pi} answer={part.output as QuestionAnswerData} input={part.input} />
+														);
+													}
+													return null;
+												}
 												switch (part.type) {
 													case "text": {
 														const sourceId = textPartMessageId(part.id);
@@ -1611,28 +1675,6 @@ export function Chat({
 																onOpen={() => setPlanOpen(true)}
 															/>
 														);
-													case "tool-quiz":
-													case "tool-probe":
-													case "tool-ask_user_question":
-													case "tool-explain":
-													case "tool-recall":
-													case "tool-check_point": {
-														const malformed = !busy && malformedQuestions.find(call => call.messageId === part.sourceMessageId && call.contentIndex === part.sourceContentIndex && call.toolCallId === part.toolCallId);
-														if (malformed) return <MalformedQuestion key={pi} disabled={!!pending || compacting}
-															reason={pending ? "Answer or discard the remaining question first." : undefined}
-															onRetry={() => {
-																draftRef.current = null;
-																void send({ type: "retry-question", messageId: malformed.messageId, contentIndex: malformed.contentIndex, toolCallId: malformed.toolCallId });
-															}} />;
-														// Pending/streaming questions live in the dock, not the
-														// transcript; answered ones render as graded records.
-														if (part.state === "output-available") {
-															return (
-																<AnsweredCard key={pi} answer={part.output as QuestionAnswerData} input={part.input} />
-															);
-														}
-														return null;
-													}
 													default: {
 														// A tool call being WRITTEN (owner, streaming round 2026-10-01):
 														// input-streaming spans the whole execution, and the live card —
@@ -2425,7 +2467,7 @@ function DockOverlay({
 						>
 							{pending ? (
 								<QuestionDock
-									toolName={pending.tool as "quiz" | "probe" | "ask_user_question" | "explain" | "recall" | "check_point"}
+									toolName={pending.tool as "quiz" | "probe" | "ask_user_question" | "explain" | "recall" | "check_point" | "ap_mcq"}
 									toolCallId={pending.toolCallId}
 									input={pending.input as never}
 									expanded={expanded}

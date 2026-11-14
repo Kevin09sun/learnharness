@@ -21,12 +21,14 @@ import {
 	seededRandom,
 	shuffleOptions,
 	toolQuestionKind,
+	parseApMcqInput,
 	parseAskInput,
 	parseQuizInput,
 	parseExplainInput,
 	toggleOption,
 	toggleOther,
 	type AnswerRequest,
+	type ApMcqToolInput,
 	type AskToolInput,
 	type DockSelection,
 	type ExplainToolInput,
@@ -61,9 +63,9 @@ import { CONFIDENCE_COLORS, confidenceRailStyle } from "@/components/confidence-
  */
 
 export interface QuestionDockProps {
-	toolName: "quiz" | "probe" | "ask_user_question" | "explain" | "recall" | "check_point";
+	toolName: "quiz" | "probe" | "ask_user_question" | "explain" | "recall" | "check_point" | "ap_mcq";
 	toolCallId: string;
-	input: QuizToolInput | AskToolInput | ExplainToolInput;
+	input: QuizToolInput | AskToolInput | ExplainToolInput | ApMcqToolInput;
 	/** Collapse state, owned by the DockOverlay (it drives the shell's height morph). */
 	expanded: boolean;
 	/**
@@ -119,14 +121,25 @@ export function QuestionDock({
 	// the probe quiz ("probe") is quiz-shaped, the probe free-recall
 	// ("recall") is explain-shaped. Old records keep the teach names.
 	// Test prep's check_point is explain-shaped too, but keeps its own
-	// "Check" label.
+	// "Check" label. AP's ap_mcq is quiz-shaped (four options, one correct,
+	// "I don't know") but parses against its own schema and withholds the
+	// verdict: its label names the generated origin.
 	const canonical =
-		toolName === "probe" ? "quiz" : toolName === "recall" || toolName === "check_point" ? "explain" : toolName;
+		toolName === "probe" || toolName === "ap_mcq" ? "quiz" : toolName === "recall" || toolName === "check_point" ? "explain" : toolName;
 	// The chip's display name carries the tool's OWN name (owner
 	// 2026-10-09): probe-phase questions label Probe/Recall in the
-	// composer; check_point labels Check; teach tools keep the standing
-	// labels.
-	const toolLabel = toolName === "probe" ? "Probe" : toolName === "recall" ? "Recall" : toolName === "check_point" ? "Check" : undefined;
+	// composer; check_point labels Check; AP questions label AP · generated;
+	// teach tools keep the standing labels.
+	const toolLabel =
+		toolName === "probe"
+			? "Probe"
+			: toolName === "recall"
+				? "Recall"
+				: toolName === "check_point"
+					? "Check"
+					: toolName === "ap_mcq"
+						? "AP · generated"
+						: undefined;
 	// Parse, don't cast (src/core/tool-parts.ts): the model authored this
 	// input, and only the schema the tool declared vouches for its shape.
 	// The dock mounts on input-available parts (already validated at the
@@ -134,7 +147,13 @@ export function QuestionDock({
 	// anything that slips through renders the quiet fallback, never a
 	// crash on `.map` over model-authored bytes.
 	const parsed =
-		canonical === "quiz" ? parseQuizInput(input) : canonical === "explain" ? parseExplainInput(input) : parseAskInput(input);
+		toolName === "ap_mcq"
+			? parseApMcqInput(input)
+			: canonical === "quiz"
+				? parseQuizInput(input)
+				: canonical === "explain"
+					? parseExplainInput(input)
+					: parseAskInput(input);
 	if (!parsed) {
 		return <MalformedQuestion />;
 	}
@@ -267,6 +286,10 @@ function QuestionDockForm({
 	compactionRunning = false,
 }: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal">) {
 	const kind = toolQuestionKind(toolName);
+	// AP multiple choice is quiz-shaped mechanically, but the verdict is the
+	// tutor's (stage 1 global constraint): no confidence slider, and no
+	// confidence is sent on its answer. Every other quiz keeps both.
+	const showsConfidence = kind === "quiz" && toolName !== "ap_mcq";
 
 	// Canonical QuestionData, built once per question. Quiz options are
 	// deterministically shuffled (seeded by toolCallId) so position never leaks
@@ -400,7 +423,7 @@ function QuestionDockForm({
 			thinking: qd.mode !== "text" ? thinkingTextRef.current.trim() || undefined : undefined,
 			// Always sent on quiz answers (owner: 50 must mean 50, never
 			// "untouched"); buildAnswer drops it on "I don't know".
-			confidence: kind === "quiz" ? CONFIDENCE_STOPS[confIdx] : undefined,
+			confidence: showsConfidence ? CONFIDENCE_STOPS[confIdx] : undefined,
 		};
 		// Snapshot before optimistic submission unmounts the form. Ref values
 		// include the dictation finals that just landed, unlike stale closures.
@@ -530,7 +553,7 @@ function QuestionDockForm({
 				// SAME pattern as ↑/↓ over the rows — works wherever focus
 				// sits, no click-in, no focus ring. Dead on "I don't know"
 				// (the slider grays out and nothing is sent).
-				if (kind !== "quiz" || sel.dontKnow) return;
+				if (!showsConfidence || sel.dontKnow) return;
 				e.preventDefault();
 				setConfIdx((i) =>
 					Math.min(
@@ -573,13 +596,15 @@ function QuestionDockForm({
 							? "Recall"
 							: toolName === "check_point"
 								? "Check"
-								: kind === "quiz"
-									? qd.questionType === "predict"
-										? "Prediction"
-										: "Check"
-									: kind === "explain"
-										? "Explain"
-										: "Question"}
+								: toolName === "ap_mcq"
+									? "AP · generated"
+									: kind === "quiz"
+										? qd.questionType === "predict"
+											? "Prediction"
+											: "Check"
+										: kind === "explain"
+											? "Explain"
+											: "Question"}
 					{qd.mode === "multi-select" && " · select all that apply"}
 				</div>
 				<div className="mb-3 font-medium">
@@ -757,7 +782,7 @@ function QuestionDockForm({
 				app-wide). Clicking and dragging are native. "I don't know"
 				GRAYS it out — the layout holds, no value is sent, the IDK
 				signal stands alone. */}
-			{kind === "quiz" && (
+			{showsConfidence && (
 				<div className="border-t border-border/60 px-4 py-2.5">
 					<div className="flex items-center gap-3">
 						<span
@@ -852,7 +877,11 @@ function QuestionDockForm({
 					className="rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
 				>
 					<div className="px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-						{qd.mode === "text" ? "Your answer" : "YOUR THINKING"}
+						{qd.mode === "text"
+							? "Your answer"
+							: toolName === "ap_mcq"
+								? "YOUR REASONING (optional)"
+								: "YOUR THINKING"}
 					</div>
 					{qd.mode === "text" ? (
 						<PathInput

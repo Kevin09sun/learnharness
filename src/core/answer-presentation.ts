@@ -2,11 +2,24 @@
  * projection: answer identities, ordering, grading, and learner text remain
  * the recorded facts; only model-authored display text comes from the call. */
 import { normalizeOptions, type QuestionAnswerData } from "./question-core.ts";
-import { parseAskInput, parseExplainInput, parseQuizInput } from "./tool-parts.ts";
+import { parseApMcqInput, parseAskInput, parseExplainInput, parseQuizInput } from "./tool-parts.ts";
 import { repairMathForDisplay } from "./math-delims.ts";
 
 export function answerForPresentation(answer: QuestionAnswerData, input: unknown): QuestionAnswerData {
 	if (answer.dismissed) return answer;
+	// AP multiple choice withholds the verdict: the learner sees the
+	// question, the options, his pick and his reasoning — never whether he
+	// was right, the correct option, the option notes or an explanation.
+	// The tutor's next reply is the verdict (stage 1 global constraint).
+	if (answer.tool === "ap_mcq") {
+		const source = parseApMcqInput(input);
+		const projected: QuestionAnswerData = source ? { ...answer, questionText: source.question } : { ...answer };
+		delete projected.correct;
+		delete projected.correctIndices;
+		delete projected.committed;
+		delete projected.explanation;
+		return projected;
+	}
 	const quiz = answer.kind === "quiz" ? parseQuizInput(input) : undefined;
 	const explain = answer.kind === "explain" ? parseExplainInput(input) : undefined;
 	const source = quiz ?? explain ?? (answer.kind === "ask" ? parseAskInput(input) : undefined);

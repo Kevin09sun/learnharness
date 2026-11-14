@@ -150,7 +150,7 @@ afterEach(async () => { await cleanup?.(); cleanup = undefined; });
 
 /** linkedom has no Selection/default editing actions. The shim tests our offset
  * contract, NOT browser caret navigation or the native IME implementation. */
-async function fixture(initial: string, singleLine = false) {
+async function fixture(initial: string, singleLine = false, allowFilePaths?: boolean) {
 	const { window: win, document: doc } = parseHTML("<html><body><div id='root'></div><button id='elsewhere'></button></body></html>");
 	let active: Element = doc.body;
 	Object.defineProperty(doc, "activeElement", { get: () => active });
@@ -174,7 +174,7 @@ async function fixture(initial: string, singleLine = false) {
 	const writes: string[] = [];
 	let keys = 0;
 	function draw() {
-		reactRoot.render(<PathInput ref={ref} singleLine={singleLine} value={value} onValueChange={(next) => { writes.push(next); value = next; draw(); }} onKeyDown={() => { keys++; }} />);
+		reactRoot.render(<PathInput ref={ref} singleLine={singleLine} allowFilePaths={allowFilePaths} value={value} onValueChange={(next) => { writes.push(next); value = next; draw(); }} onKeyDown={() => { keys++; }} />);
 	}
 	await act(async () => { draw(); });
 	cleanup = async () => {
@@ -226,6 +226,23 @@ test("native typing, token insertion/deletion and undo/redo share one history", 
 	assert.equal(f.value, "a");
 	await f.event("beforeinput", { inputType: "historyRedo" });
 	assert.equal(f.value, "ab");
+});
+
+test("allowFilePaths={false} ignores an inserted file path (AP's name-only composer)", async () => {
+	const f = await fixture("Course title", false, false);
+	f.select(f.value.length);
+	await f.event(INSERT_FILE_PATHS_EVENT, { detail: ["/course/notes.pdf"] });
+	assert.equal(f.value, "Course title");
+	assert.equal(readPathInput(f.root), "Course title");
+	assert.deepEqual(f.writes, [], "the gate never notifies the controlled owner");
+});
+
+test("an inserted file path is staged when allowFilePaths is omitted (the default)", async () => {
+	const f = await fixture("Course title");
+	f.select(f.value.length);
+	await f.event(INSERT_FILE_PATHS_EVENT, { detail: ["/course/notes.pdf"] });
+	assert.equal(f.value, "Course title `/course/notes.pdf`");
+	assert.deepEqual(f.writes, ["Course title `/course/notes.pdf`"]);
 });
 
 test("Cmd+Backspace delegates line extent to beforeinput instead of deleting just the final chip", async () => {

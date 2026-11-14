@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { CornerDownLeftIcon, DumbbellIcon, ClipboardListIcon } from "lucide-react";
 import { GraphView } from "@/components/graph-view";
@@ -19,14 +19,84 @@ import { AttachFilesButton } from "@/components/attach-files-button";
 import { SessionStarter } from "@/components/start-session";
 import type { TurnUsage } from "@/src/core";
 
-/** The composer's three session kinds (test prep joined Teach/Practice,
- *  2026-11-10). */
-const HOME_MODES = ["teach", "practice", "testprep"] as const;
-const HOME_MODE_LABELS: Record<(typeof HOME_MODES)[number], string> = {
+/** The composer's four session kinds (test prep joined Teach/Practice,
+ *  2026-11-10; AP joined them 2026-11-13 — the course's setup session). */
+export const HOME_MODES = ["teach", "practice", "testprep", "ap"] as const;
+export type HomeMode = (typeof HOME_MODES)[number];
+export const HOME_MODE_LABELS: Record<HomeMode, string> = {
 	teach: "Teach",
 	practice: "Practice",
 	testprep: "Test prep",
+	ap: "AP",
 };
+
+/** The opening composer's placeholder per mode (pure — the render seam). */
+export function homePlaceholder(mode: HomeMode): string {
+	return mode === "practice"
+		? "What do you want to practice?"
+		: mode === "testprep"
+			? "Attach the folder with your outline or slides"
+			: mode === "ap"
+				? "Which AP course? e.g. AP Calculus BC"
+				: "What do you want to learn?";
+}
+
+/** The send gate (pure — the render seam): the composer needs text (or a
+ *  live dictation), and a Test prep draft also needs its test name. AP
+ *  names its course FROM the text, so it adds no gate. */
+export function homeSendDisabled({
+	mode,
+	title,
+	testName,
+	busy,
+	dictationActive,
+}: {
+	mode: HomeMode;
+	title: string;
+	testName: string;
+	busy: boolean;
+	dictationActive: boolean;
+}): boolean {
+	return (!title.trim() && !dictationActive) || busy || (mode === "testprep" && !testName.trim());
+}
+
+/** The creation body (pure — the render seam). AP's text IS the course
+ *  name, so it rides twice: the session title and the new course's title. */
+export function homeCreationBody({
+	mode,
+	title,
+	testName,
+	practiceProps,
+}: {
+	mode: HomeMode;
+	title: string;
+	testName: string;
+	practiceProps: readonly { id: string; name: string; statement: string }[];
+}): Parameters<SessionStarter["start"]>[0] {
+	return {
+		title,
+		...(mode === "practice" ? { kind: "practice" as const } : {}),
+		...(mode === "testprep" ? { kind: "testprep" as const, testTitle: testName.trim() } : {}),
+		...(mode === "ap" ? { kind: "ap" as const, apCourseTitle: title } : {}),
+		...(mode !== "testprep" && mode !== "ap" && practiceProps.length > 0
+			? { graphContext: { propositions: practiceProps } }
+			: {}),
+	};
+}
+
+/** The composer's attach control. AP starts a course by name only, so its
+ *  paperclip is absent; Teach, Practice and Test prep keep it unchanged
+ *  (2026-11-13). Exported so the render harness pins the surface. */
+export function HomeAttachButton({
+	mode,
+	editorRef,
+}: {
+	mode: HomeMode;
+	editorRef: RefObject<HTMLDivElement | null>;
+}) {
+	if (mode === "ap") return null;
+	return <AttachFilesButton editorRef={editorRef} />;
+}
 
 /**
  * Home — the knowledge graph is the main view, full-bleed edge to edge
@@ -104,8 +174,10 @@ export function Home({
 	 *  Not enforcing any input format — the picks are a convenience.
 	 *  TEST PREP (2026-11-10) is the third mode: it names the test and
 	 *  creates it with the session; the folder rides the normal attach
-	 *  picker into the first message. */
-	const [mode, setMode] = useState<"teach" | "practice" | "testprep">("teach");
+	 *  picker into the first message. AP (2026-11-13) is the fourth: its
+	 *  text IS the course name and creates that course's setup session —
+	 *  starting a sitting on an existing course happens on /ap/[id]. */
+	const [mode, setMode] = useState<HomeMode>("teach");
 	const [testName, setTestName] = useState("");
 	const [practiceProps, setPracticeProps] = useState<{ id: string; name: string; statement: string }[]>([]);
 	const [chainSelectOpen, setChainSelectOpen] = useState(false);
@@ -161,12 +233,11 @@ export function Home({
 			// graph-context marker as message[0] (a separate custom message
 			// before the learner's first user message, propositions + the
 			// chains among them); the prompt stays the learner's own words.
-			const target = await starterRef.current.start({
-				title: t,
-				...(mode === "practice" ? { kind: "practice" } : {}),
-				...(mode === "testprep" ? { kind: "testprep", testTitle: testName.trim() } : {}),
-				...(mode !== "testprep" && practiceProps.length > 0 ? { graphContext: { propositions: practiceProps } } : {}),
-			}, fetch, JSON.stringify(catalog?.slots.strong));
+			const target = await starterRef.current.start(
+				homeCreationBody({ mode, title: t, testName, practiceProps }),
+				fetch,
+				JSON.stringify(catalog?.slots.strong),
+			);
 			router.push(target);
 		} catch {
 			startingRef.current = false;
@@ -288,7 +359,8 @@ export function Home({
 							topicRef.current = value;
 							setTopic(value);
 						}}
-						defaultDropTarget
+						defaultDropTarget={mode !== "ap"}
+						allowFilePaths={mode !== "ap"}
 						onKeyDown={(e) => {
 							// Esc ends dictation (the dictate decisions: click-again or
 							// Esc) — stopPropagation claims it (keyboard wave A) so
@@ -304,23 +376,17 @@ export function Home({
 								void start();
 							}
 						}}
-						placeholder={
-							mode === "practice"
-								? "What do you want to practice?"
-								: mode === "testprep"
-									? "Attach the folder with your outline or slides"
-									: "What do you want to learn?"
-						}
+						placeholder={homePlaceholder(mode)}
 						autoFocus
 						className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 					/>
-					<AttachFilesButton editorRef={topicInputRef} />
+					<HomeAttachButton mode={mode} editorRef={topicInputRef} />
 					{/* No tooltip on the start square — the ↵ glyph is the
 					    affordance (owner, subtlety round 2026-09-25). */}
 					<button
 						type="submit"
 						aria-label="Start session"
-						disabled={(!topic.trim() && !dictation.active) || busy || (mode === "testprep" && !testName.trim())}
+						disabled={homeSendDisabled({ mode, title: topic, testName, busy, dictationActive: dictation.active })}
 						className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-40"
 					>
 						<CornerDownLeftIcon className="size-5" />
@@ -349,7 +415,9 @@ export function Home({
 										}
 									>
 										{m === "practice" ? <DumbbellIcon aria-hidden="true" className="size-3" /> : null}
-										{m === "testprep" ? <ClipboardListIcon aria-hidden="true" className="size-3" /> : null}
+										{/* The AP mode reuses the Test prep twin's icon: the brief
+										    gives the label only, so nothing new is invented here. */}
+										{m === "testprep" || m === "ap" ? <ClipboardListIcon aria-hidden="true" className="size-3" /> : null}
 										{HOME_MODE_LABELS[m]}
 									</button>
 								))}

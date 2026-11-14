@@ -37,6 +37,18 @@ function headlineArg(tool: string, input: unknown): string {
 	// the call's subject — shown as given.
 	if (tool === "web_search" && typeof inp.query === "string") return inp.query;
 	if (tool === "web_fetch" && typeof inp.url === "string") return inp.url;
+	// AP prep (2026-11-13): the paper tools name their local path; a saved
+	// document names the official URL it came from (or the local path when
+	// the model filed an already-downloaded paper). The progress review and
+	// the result record name the topic.
+	if (tool === "pdf_info" || tool === "pdf_extract" || tool === "pdf_search") {
+		return typeof inp.path === "string" ? inp.path : "";
+	}
+	if (tool === "ap_save_document") {
+		if (typeof inp.url === "string" && inp.url.length > 0) return inp.url;
+		return typeof inp.path === "string" ? inp.path : "";
+	}
+	if (tool === "ap_record_result" && typeof inp.topicId === "string") return inp.topicId;
 	if (typeof inp.pattern === "string") return inp.pattern;
 	// list_propositions: the session id is the call's subject — the
 	// collapsed line reads "list_propositions chat_…". Shown as given
