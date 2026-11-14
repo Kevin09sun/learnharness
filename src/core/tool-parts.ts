@@ -29,7 +29,7 @@
 
 import { Value } from "typebox/value";
 import type { TSchema } from "typebox";
-import { quizDisplayInputSchema, askInputSchema, askOptionProblems, quizInputProblems, explainInputProblems, explainDisplayInputSchema, type AskToolInput, type QuizToolInput, type ExplainToolInput } from "./question-core.ts";
+import { quizDisplayInputSchema, askInputSchema, askOptionProblems, quizInputProblems, explainInputProblems, explainDisplayInputSchema, apMcqInputObject, apMcqInputProblems, type AskToolInput, type QuizToolInput, type ExplainToolInput, type ApMcqToolInput } from "./question-core.ts";
 import { healEncodedArguments } from "./argument-heal.ts";
 import { probeDoneInputSchema, type ProbeDoneInput } from "./contracts/probe.ts";
 
@@ -113,13 +113,28 @@ export function parseExplainInput(input: unknown): ExplainToolInput | undefined 
 	return cleaned;
 }
 
+/**
+ * AP multiple-choice parse for DISPLAY: the tool's own schema plus the
+ * authoring problems (option labels, the single correct value, the four
+ * notes). Nothing is repaired here — the pending gate and the dock both
+ * need the same strict verdict. Returns the call-shaped source; the
+ * correctAnswer and optionNotes stay model-side (never rendered).
+ */
+export function parseApMcqInput(input: unknown): ApMcqToolInput | undefined {
+	const cleaned = boundaryParse<ApMcqToolInput>(apMcqInputObject, healEncodedArguments(input, apMcqInputObject));
+	if (!cleaned) return undefined;
+	if (apMcqInputProblems(cleaned).length > 0) return undefined;
+	return cleaned;
+}
+
 /** One display-validity decision for dock authority and recovery. Does not
  * mutate the recorded input or invent missing authoring fields. */
-export function parseQuestionInput(tool: string, input: unknown): QuizToolInput | AskToolInput | ExplainToolInput | undefined {
+export function parseQuestionInput(tool: string, input: unknown): QuizToolInput | AskToolInput | ExplainToolInput | ApMcqToolInput | undefined {
 	switch (tool) {
 		case "quiz": case "probe": return parseQuizInput(input);
 		case "explain": case "recall": case "check_point": return parseExplainInput(input);
 		case "ask_user_question": return parseAskInput(input);
+		case "ap_mcq": return parseApMcqInput(input);
 		default: return undefined;
 	}
 }

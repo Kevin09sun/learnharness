@@ -62,6 +62,14 @@ export const INTERRUPTED_TEXT =
 export const CHECK_POINT_ANSWER_FRAME =
 	"The learner answered the check_point question you posed. This tool result IS the learner's typed answer — grade it now against your committed correctAnswer, then call record_result.";
 
+/** The contract sentence for an AP `ap_mcq` answer (stage 1): the result IS
+ *  the learner's pick plus, when present, his reasoning — the tutor grades
+ *  it against the committed correctAnswer and optionNotes and records the
+ *  outcome. Like check_point, scoped to its own tool: every other answer's
+ *  payload stays byte-identical. */
+export const AP_MCQ_ANSWER_FRAME =
+	"The learner answered the ap_mcq question you posed. This tool result IS the learner's pick and, when present, their reasoning — grade it now against your committed correctAnswer and optionNotes, then call ap_record_result.";
+
 // ─── The record's message type ───────────────────────────────────────────────
 
 /**
@@ -210,27 +218,34 @@ export function newUserSteer(text: string, id: string): LhMessage & UserMessage 
  *  TWO AUDIENCES (owner, tool-result diet 2026-10-02): the MODEL sees the
  *  compact learner-only record (compactAnswerForModel — the call's own
  *  arguments already carry the question/options/explanation/commitment;
- *  restating them doubled every answer's tokens). check_point is the one
- *  exception: its text is preceded by CHECK_POINT_ANSWER_FRAME, because the
- *  posing placeholder is dropped by persistTurn and the bare JSON would not
- *  say the result IS the learner's typed answer. `details` keeps the FULL
- *  graded QuestionAnswerData for the record and the UI. */
+ *  restating them doubled every answer's tokens). check_point and ap_mcq are
+ *  the exceptions: their text is preceded by the tool's answer frame, because
+ *  the posing placeholder is dropped by persistTurn and the bare JSON would
+ *  not say the result IS the learner's answer (typed, for check_point; the
+ *  pick plus reasoning, for ap_mcq). `details` keeps the FULL graded
+ *  QuestionAnswerData for the record and the UI. */
 export function newAnswerResult(
 	toolCallId: string,
 	toolName: string,
 	answer: unknown,
 ): LhMessage & ToolResultMessage {
 	const compact = JSON.stringify(compactAnswerForModel(answer as QuestionAnswerData));
-	// check_point only (controller ruling, 2026-11-11): state that this result
-	// IS the learner's typed answer. Dismissals are not answers and keep the
-	// bare compact record.
-	const framed = toolName === "check_point" && !(answer as QuestionAnswerData | null)?.dismissed;
+	// check_point and ap_mcq only (controller rulings, 2026-11-11 / stage 1):
+	// state that this result IS the learner's answer. Dismissals are not
+	// answers and keep the bare compact record.
+	const frame =
+		toolName === "check_point"
+			? CHECK_POINT_ANSWER_FRAME
+			: toolName === "ap_mcq"
+				? AP_MCQ_ANSWER_FRAME
+				: undefined;
+	const framed = frame !== undefined && !(answer as QuestionAnswerData | null)?.dismissed;
 	return {
 		id: newMessageId(),
 		role: "toolResult",
 		toolCallId,
 		toolName,
-		content: [{ type: "text", text: framed ? `${CHECK_POINT_ANSWER_FRAME}\n\n${compact}` : compact }],
+		content: [{ type: "text", text: framed ? `${frame}\n\n${compact}` : compact }],
 		// 0.87.1 narrowed ToolResultMessage.details to JsonRepresentation —
 		// our payloads are JSON-safe answer structures, so the cast is honest.
 		details: answer as ToolResultMessage["details"],
