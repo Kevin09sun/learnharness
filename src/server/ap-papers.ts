@@ -79,6 +79,14 @@ export function ensureApPapersIgnored(): void {
 	fs.writeFileSync(ignoreFile, "ap-papers/\n", "utf8");
 }
 
+/** Test seam: the fetch a caller gets when it omits one. Production keeps
+ *  the real fetch; route tests swap a stub so nothing touches the network. */
+let apPaperFetch: typeof fetch = fetch;
+
+export function setApPaperFetch(fetchImpl: typeof fetch): void {
+	apPaperFetch = fetchImpl;
+}
+
 /**
  * Download an official paper. Refuses anything that is not College Board,
  * anything that redirects off College Board, a non-PDF body and a body over
@@ -89,7 +97,7 @@ export async function downloadApPaper(
 	courseId: string,
 	url: string,
 	file: string,
-	fetchImpl: typeof fetch = fetch,
+	fetchImpl: typeof fetch = apPaperFetch,
 ): Promise<{ file: string; bytes: number }> {
 	const target = apPaperPath(courseId, file); // validates id and file name
 	if (!isCollegeBoardUrl(url)) throw new Error("Only College Board addresses are accepted");
