@@ -90,6 +90,21 @@ describe("AP: the live ap_mcq dock", () => {
 		assert.ok(!html.includes('data-testid="confidence-track"'), "no confidence rail on an AP question");
 	});
 
+	it("labels the collapsed bar AP · generated", () => {
+		const html = renderToStaticMarkup(
+			<QuestionDock
+				toolName="ap_mcq"
+				toolCallId="ap1"
+				input={apMcqInput as never}
+				expanded={false}
+				onExpand={() => {}}
+				onSubmit={() => {}}
+			/>,
+		);
+		assert.ok(html.includes('data-testid="question-dock-bar"'), "the collapsed bar renders");
+		assert.match(html, /data-testid="question-dock-bar"[\s\S]*?AP · generated/);
+	});
+
 	it("renders the call's details", () => {
 		assert.ok(renderDock().includes(apMcqInput.details));
 	});
@@ -132,10 +147,22 @@ describe("AP: the answered ap_mcq card withholds the verdict", () => {
 		}
 	});
 
-	it("the verdict flag never changes the rendered card", () => {
-		const correct = renderToStaticMarkup(<AnsweredCard answer={answeredApMcq({ correct: true })} input={apMcqInput} />);
-		const wrong = renderToStaticMarkup(<AnsweredCard answer={answeredApMcq({ correct: false })} input={apMcqInput} />);
-		assert.equal(correct, wrong);
+	it("a correct pick and a wrong pick differ only in which option is marked picked", () => {
+		const correct = renderToStaticMarkup(
+			<AnsweredCard answer={answeredApMcq({ correct: true, answers: [{ index: 1, label: "2x", value: "2x" }] })} input={apMcqInput} />,
+		);
+		const wrong = renderToStaticMarkup(
+			<AnsweredCard answer={answeredApMcq({ correct: false, answers: [{ index: 2, label: "x", value: "x" }] })} input={apMcqInput} />,
+		);
+		// Each card marks exactly its own pick, with the same neutral styling.
+		assert.equal(correct.match(/border-primary bg-accent/g)?.length, 1);
+		assert.equal(wrong.match(/border-primary bg-accent/g)?.length, 1);
+		// With the pick marker and its muted-label side effect erased, the two
+		// cards are the SAME record: the correct pick and the wrong pick are
+		// indistinguishable to the card, which is the withheld verdict.
+		const withoutPick = (html: string) =>
+			html.replace(/ border-primary bg-accent/g, "").replace(/class="text-muted-foreground"/g, 'class=""');
+		assert.equal(withoutPick(correct), withoutPick(wrong));
 	});
 
 	it("labels the learner's reasoning YOUR REASONING", () => {

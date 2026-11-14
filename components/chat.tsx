@@ -81,6 +81,7 @@ import {
 	findPendingToolCall,
 	phaseAt3,
 	phaseTimeline,
+	QUESTION_TOOLS,
 	teachStepIndex,
 	toolQuestionKind,
 	questionNeedsReveal,
@@ -187,6 +188,19 @@ export function retryFailedResponse(
 
 /** useLayoutEffect that is silent during SSR (client components still render on the server in Next). */
 const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+/**
+ * How a tool part routes in the transcript. Question tools are client-owned:
+ * a settled answer renders the AnsweredCard, every other state stays out of
+ * the transcript entirely (the live question lives in the dock; letting it
+ * fall through would print the raw call input — the model's correctAnswer
+ * and optionNotes commitment — in LiveToolCard while the question streams).
+ * Non-question tools keep the ordinary transcript/artifact routing.
+ */
+export function questionPartDisposition(type: string, state: string | undefined): "suppress" | "answered" | "default" {
+	if (!(QUESTION_TOOLS as readonly string[]).includes(type.replace(/^tool-/, ""))) return "default";
+	return state === "output-available" ? "answered" : "suppress";
+}
 
 /** A wake-pipeline steer message: user-role delivery whose metadata marks it
  * as a sub-agent result — rendered as an artifact card, never a bubble. */
@@ -1582,6 +1596,26 @@ export function Chat({
 														</SystemLine>
 													);
 												}
+												// Question tools never reach the switch: their live states
+												// are suppressed and only a settled answer renders.
+												const questionDisposition = questionPartDisposition(part.type, part.state);
+												if (questionDisposition !== "default") {
+													const malformed = !busy && malformedQuestions.find(call => call.messageId === part.sourceMessageId && call.contentIndex === part.sourceContentIndex && call.toolCallId === part.toolCallId);
+													if (malformed) return <MalformedQuestion key={pi} disabled={!!pending || compacting}
+														reason={pending ? "Answer or discard the remaining question first." : undefined}
+														onRetry={() => {
+															draftRef.current = null;
+															void send({ type: "retry-question", messageId: malformed.messageId, contentIndex: malformed.contentIndex, toolCallId: malformed.toolCallId });
+														}} />;
+													// Pending/streaming questions live in the dock, not the
+													// transcript; answered ones render as records.
+													if (questionDisposition === "answered") {
+														return (
+															<AnsweredCard key={pi} answer={part.output as QuestionAnswerData} input={part.input} />
+														);
+													}
+													return null;
+												}
 												switch (part.type) {
 													case "text": {
 														const sourceId = textPartMessageId(part.id);
@@ -1613,29 +1647,6 @@ export function Chat({
 																onOpen={() => setPlanOpen(true)}
 															/>
 														);
-													case "tool-quiz":
-													case "tool-probe":
-													case "tool-ask_user_question":
-													case "tool-explain":
-													case "tool-recall":
-													case "tool-check_point":
-													case "tool-ap_mcq": {
-														const malformed = !busy && malformedQuestions.find(call => call.messageId === part.sourceMessageId && call.contentIndex === part.sourceContentIndex && call.toolCallId === part.toolCallId);
-														if (malformed) return <MalformedQuestion key={pi} disabled={!!pending || compacting}
-															reason={pending ? "Answer or discard the remaining question first." : undefined}
-															onRetry={() => {
-																draftRef.current = null;
-																void send({ type: "retry-question", messageId: malformed.messageId, contentIndex: malformed.contentIndex, toolCallId: malformed.toolCallId });
-															}} />;
-														// Pending/streaming questions live in the dock, not the
-														// transcript; answered ones render as graded records.
-														if (part.state === "output-available") {
-															return (
-																<AnsweredCard key={pi} answer={part.output as QuestionAnswerData} input={part.input} />
-															);
-														}
-														return null;
-													}
 													default: {
 														// A tool call being WRITTEN (owner, streaming round 2026-10-01):
 														// input-streaming spans the whole execution, and the live card —
