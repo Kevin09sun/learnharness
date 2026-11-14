@@ -184,6 +184,11 @@ const ACTIVITY_LABELS: Record<string, string> = {
 	pdf: "Reading a PDF…",
 	plan_init: "Drawing up the plan…",
 	probe_done: "Concluding the assessment…",
+	// AP prep (2026-11-13): the course-shape proposal, the paper download and
+	// the progress check all run long enough to need their own label.
+	ap_save_document: "Saving the course description…",
+	propose_units: "Proposing units and topics…",
+	ap_progress: "Checking progress…",
 };
 
 /** The activity label for ONE running tool (owner, streaming round
