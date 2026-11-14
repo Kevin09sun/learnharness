@@ -7,6 +7,7 @@
 - [Claude Code](claude-code.md) — use an installed CLI and troubleshoot its connection.
 - [Custom and local models](custom-providers.md) — configure an OpenAI-compatible endpoint.
 - [Test prep](test-prep.md) — turn a test outline into a plan, diagnose each point, and track readiness across sittings.
+- [AP prep](ap-prep.md) — build an AP course from the official description, practise multiple-choice questions, and track readiness across sittings.
 - [Context, caching, and costs](compaction-accounting.md) — understand the session meters and advanced cache preferences.
 - [Learning-data skill](../skills/learnharness/SKILL.md) — a read-only guide and standalone readers for local learning records.
 

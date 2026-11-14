@@ -20,7 +20,7 @@ This reference describes the [repository source](README.md#about-these-docs). Se
 
 ## Conversations and turns
 
-A **conversation** is a durable `ChatRecord` with native `LhMessage[]`, settings, optional plan, and usage logs. Missing `kind` means teaching; `practice` selects the practitioner. An **engine** is the resolved Pi model, stream function, and thinking level. An application **turn** constructs a fresh native Pi `Agent` from saved history; it can make several model calls and execute tools. It is not an HTTP connection or a single generation.
+A **conversation** is a durable `ChatRecord` with native `LhMessage[]`, settings, optional plan, and usage logs. Missing `kind` means teaching; `practice` selects the practitioner; `testprep` and `ap` select their prep tutors and records. An **engine** is the resolved Pi model, stream function, and thinking level. An application **turn** constructs a fresh native Pi `Agent` from saved history; it can make several model calls and execute tools. It is not an HTTP connection or a single generation.
 
 ```mermaid
 flowchart LR
@@ -72,6 +72,16 @@ Question tools validate and execute server-side, returning a synthetic terminati
 A matching successful `probe_done` result selects the teacher and queues a fresh-agent handoff. A bare/refused call does not. Planning begins at that seam; displayed teaching begins at the first node-tagged `quiz`/`explain`, not `plan_init`. The plan is a validated Mermaid DAG, replaceable through `plan_init`. Current/visited positions derive from tagged calls, not grades. Waiting for the learner's natural reply to the plan is prompt doctrine, not an acceptance transaction.
 
 Practice uses the same turn/persistence/recovery path, not a separate problem-set service. [`tools/practice.ts`](../src/agent/tools/practice.ts) commits a statement and solution with `problem`; `conclude` records the outcome and reveals that solution. A turn-scoped gate enforces one active problem. The post-conclusion pause is doctrine, not a terminating `conclude` result. Next adds an explicit marker. Practice outcomes are session evidence, not graph mastery; ordinary practice settlement skips extraction.
+
+### AP prep
+
+AP is a fourth session kind (`ap`) for one exam course. A course record holds its units and official numbered topics — the same section/point shape Test prep uses, so [`core/test-prep.ts`](../src/core/test-prep.ts) supplies the status machine, queue order, readiness and plan merge unchanged. [`core/ap.ts`](../src/core/ap.ts) adds the sitting scope (one topic, one unit, or weak topics across units), the scoped queue and the session label.
+
+Each practice sitting is its own AP session, linked to the course and carrying its scope and question kind; setup is a separate session linked to the same course. The registry in [`tools/ap.ts`](../src/agent/tools/ap.ts) saves the official course description, reads it with the PDF tools, proposes the unit and topic list for confirmation, reports progress and the queue, poses one multiple-choice question (`ap_mcq`), and records the graded outcome (`ap_record_result`). The committed correct option and option notes are never presented: the multiple-choice card withholds any verdict, and the tutor's reply is the verdict.
+
+The course record is [`store/ap-courses.ts`](../src/store/ap-courses.ts), at `data/ap/<id>.json`. It holds the plan, each topic's status and attempt history, and a manifest of official documents — not their bytes — and it syncs with the rest of `data/`.
+
+Official PDFs live in a separate local store at `data/ap-papers/<courseId>/` ([`server/ap-papers.ts`](../src/server/ap-papers.ts)). They are deliberately unsynced (`ap-papers/` in `data/.gitignore`): the bytes and anything rebuilt from them can be downloaded again, so only the manifest travels with the course record. A course opened where a document is missing shows it on the course page and offers a fresh download. The download accepts only College Board addresses, checked on the requested URL and every redirect hop, and writes atomically.
 
 [Prompt composition](../src/agent/prompts/README.md) and [tool-content display recovery](tool-content-recovery.md) have separate references.
 
