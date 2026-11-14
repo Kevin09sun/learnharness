@@ -44,7 +44,7 @@ const DOCK = "mx-auto w-full max-w-[46rem] px-4";
 export async function startDraftSession(
 	text: string,
 	fetchLike: typeof fetch,
-	mode?: "practice" | "testprep",
+	mode?: "practice" | "testprep" | "ap",
 	picks?: readonly DraftPick[],
 	starter = new SessionStarter(),
 	settingsIdentity?: string,
@@ -64,9 +64,11 @@ export async function startDraftSession(
 	return starter.start(
 		mode === "testprep"
 			? { title: t, kind: "testprep", testTitle: name }
-			: mode === "practice"
-				? { title: t, kind: "practice", ...(picks && picks.length > 0 ? { graphContext: { propositions: picks } } : {}) }
-				: { title: t },
+			: mode === "ap"
+				? { title: t, kind: "ap", apCourseTitle: t }
+				: mode === "practice"
+					? { title: t, kind: "practice", ...(picks && picks.length > 0 ? { graphContext: { propositions: picks } } : {}) }
+					: { title: t },
 		fetchLike,
 		settingsIdentity,
 	);
@@ -101,8 +103,9 @@ export function DraftShell({
 	 *  created session carries kind:"practice" and the copy changes
 	 *  (the practice agent opens; no probing). The testprep draft
 	 *  (2026-11-10) additionally names the test and creates it with the
-	 *  session. */
-	mode?: "teach" | "practice" | "testprep";
+	 *  session. The AP draft (2026-11-13) names a course: its text IS the
+	 *  course name and creates that course's setup session. */
+	mode?: "teach" | "practice" | "testprep" | "ap";
 	/** The testprep draft's test name — required before the send is live. */
 	testName?: string;
 	onTestNameChange?: (v: string) => void;
@@ -194,14 +197,18 @@ export function DraftShell({
 											? "New practice session"
 											: mode === "testprep"
 												? "New test prep session"
-												: "New session"
+												: mode === "ap"
+													? "New AP session"
+													: "New session"
 									}
 									description={
 										mode === "practice"
 											? "Pick nodes from your knowledge graph, describe what you want to practice, or bring your own problem."
 											: mode === "testprep"
 												? "Name the test and attach the folder with its outline or slides. The agent will propose a plan for you to review."
-												: "The teacher will open by probing what you already know."
+												: mode === "ap"
+													? "Name the course and attach the folder with its official course description or slides. The agent will propose units and topics for you to review."
+													: "The teacher will open by probing what you already know."
 									}
 								/>
 							</ConversationContent>
@@ -248,7 +255,9 @@ export function DraftShell({
 												? "What do you want to practice?"
 												: mode === "testprep"
 													? "Attach the folder with your outline or slides"
-													: "What do you want to learn?"
+													: mode === "ap"
+														? "Which AP course? e.g. AP Calculus BC"
+														: "What do you want to learn?"
 										}
 									/>
 								</div>
@@ -274,7 +283,7 @@ export function DraftShell({
 	);
 }
 
-export function NewSession({ initialConfigured, mode = "teach" }: { initialConfigured: boolean; mode?: "teach" | "practice" | "testprep" }) {
+export function NewSession({ initialConfigured, mode = "teach" }: { initialConfigured: boolean; mode?: "teach" | "practice" | "testprep" | "ap" }) {
 	const router = useRouter();
 	const [text, setText] = useState("");
 	// The testprep draft's test name: it names the test record created with
@@ -359,7 +368,7 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 		void startDraftSession(
 			draft,
 			fetch,
-			mode === "testprep" ? "testprep" : mode === "practice" ? "practice" : undefined,
+			mode === "testprep" ? "testprep" : mode === "ap" ? "ap" : mode === "practice" ? "practice" : undefined,
 			mode === "practice" ? picksRef.current : undefined,
 			starterRef.current,
 			JSON.stringify(catalog?.slots.strong),

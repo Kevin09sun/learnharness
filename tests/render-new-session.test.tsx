@@ -255,6 +255,32 @@ describe("the practice draft (?mode=practice, 2026-10-04)", () => {
 	});
 });
 
+describe("the AP draft (?mode=ap, 2026-11-13)", () => {
+	it("startDraftSession carries kind:\"ap\" with the course name as title and apCourseTitle", async () => {
+		let body: Record<string, unknown> | null = null;
+		const f = (async (_url: string, init?: RequestInit) => {
+			body = JSON.parse(String(init?.body));
+			return new Response(JSON.stringify({ id: "c14" }), { status: 201 });
+		}) as unknown as typeof fetch;
+		const target = await startDraftSession("  AP Calculus BC ", f, "ap");
+		assert.equal(target, "/chat/c14");
+		assert.deepEqual(body, {
+			title: "AP Calculus BC",
+			kind: "ap",
+			apCourseTitle: "AP Calculus BC",
+		});
+	});
+
+	it("the shell names the AP draft, asks for the course, and has no test-name field", () => {
+		const html = renderToStaticMarkup(
+			<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} mode="ap" />,
+		);
+		assert.match(html, /New AP session/);
+		assert.match(html, /Which AP course\? e\.g\. AP Calculus BC/);
+		assert.ok(!html.includes('data-testid="test-name"'));
+	});
+});
+
 describe("the test prep draft (?mode=testprep, 2026-11-10)", () => {
 	it("startDraftSession carries the trimmed test name and kind:\"testprep\"", async () => {
 		let body: Record<string, unknown> | null = null;

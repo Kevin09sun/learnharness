@@ -21,7 +21,7 @@ export default async function NewSessionPage({
 	searchParams: Promise<{ mode?: string }>;
 }) {
 	const { mode } = await searchParams;
-	const initialMode = mode === "practice" || mode === "testprep" ? mode : "teach";
+	const initialMode = mode === "practice" || mode === "testprep" || mode === "ap" ? mode : "teach";
 	return (
 		<NewSession
 			initialConfigured={slotsConfigured(readSettingsRecord()?.models)}
