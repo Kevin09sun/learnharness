@@ -30,7 +30,7 @@ import type { ApCourseRecord, ApDocument, ApSitting } from "../../core/ap.ts";
 import type { SearchProvider } from "../../core/search.ts";
 import type { EnabledTools } from "../../core/pending.ts";
 import { invalidInputResult, questionResult } from "../tool-execute.ts";
-import { pdfInfo, parsePageSpec } from "../subagents/pdf-ops.ts";
+import { parsePageSpec, pdfInfo, pdfPageCount } from "../subagents/pdf-ops.ts";
 import { createPdfReadTools } from "./pdf-read.ts";
 import { healEncodedArguments, healToolRecord } from "./heal.ts";
 import { readTool } from "./read.ts";
@@ -491,13 +491,13 @@ function apRecordResultTool(ctx: ApToolContext): AgentTool<typeof apRecordResult
  * AP_PDF_EXTRACT_MAX_PAGES pages — including `all` on a longer document — is
  * refused before any extraction, as a retryable input problem. Requests within
  * the cap, and a document of 15 pages or fewer, behave exactly as before. The
- * tool's name, schema and description are unchanged; `info` is the pdfInfo
- * page-count seam (injectable for tests).
+ * tool's name, schema and description are unchanged; `pageCount` is the
+ * pdfPageCount seam (injectable for tests).
  */
 export function capPdfExtract(
 	tool: AgentTool<any>,
 	dir: string,
-	info: (filePath: string) => Promise<{ page_count: number }> = pdfInfo,
+	pageCount: (filePath: string) => Promise<number> = pdfPageCount,
 ): AgentTool<any> {
 	return {
 		...tool,
@@ -510,7 +510,7 @@ export function capPdfExtract(
 				const scoped = path.resolve(dir, filePath);
 				if (scoped.startsWith(root)) {
 					try {
-						const total = (await info(scoped)).page_count;
+						const total = await pageCount(scoped);
 						if (parsePageSpec(pages, total).length > AP_PDF_EXTRACT_MAX_PAGES) {
 							return invalidInputResult("pdf_extract", [AP_PDF_EXTRACT_REFUSAL]);
 						}

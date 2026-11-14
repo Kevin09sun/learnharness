@@ -9,7 +9,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { parsePageSpec, pdfExtract, pdfInfo, pdfProbe, pdfSearch } from "../src/agent/subagents/pdf-ops.ts";
+import { parsePageSpec, pdfExtract, pdfInfo, pdfPageCount, pdfProbe, pdfSearch } from "../src/agent/subagents/pdf-ops.ts";
 import { tinyPdf } from "./helpers/tiny-pdf.ts";
 
 const FIXTURE = path.join(import.meta.dirname, "fixtures", "sample-3page.pdf");
@@ -24,6 +24,12 @@ describe("pdf-ops — the pdfjs text layer", () => {
 		assert.ok(info.mean_text_length > 0);
 		// fixture has no images
 		assert.ok(info.pages.every((p) => p.image_count === 0));
+	});
+
+	it("pdfPageCount reports the count without triaging pages", async () => {
+		assert.equal(await pdfPageCount(FIXTURE), 3);
+		const garbage = path.join(import.meta.dirname, "fixtures", "not-a-pdf.txt");
+		await assert.rejects(() => pdfPageCount(garbage));
 	});
 
 	it("pdfExtract heads pages and honors the spec", async () => {
